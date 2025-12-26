@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TikTok Creator Center - Dynamique</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            margin: 0; 
+            background-color: #000000; 
+            color: #ffffff; 
+            overflow: hidden; 
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .bg-tiktok-dark { background-color: #010101; }
+        .bg-tiktok-card { background-color: #121212; }
+        .text-tiktok-red { color: #FE2C55; }
+        .bg-tiktok-red { background-color: #FE2C55; }
+        .text-tiktok-cyan { color: #25F4EE; }
+        .bg-tiktok-cyan { background-color: #25F4EE; }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: #A0A0A0;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 12px;
+            margin: 2px 12px;
+        }
+        .nav-item:hover { background-color: rgba(255,255,255,0.05); color: #ffffff; }
+        .nav-item.active { color: #FE2C55; background-color: rgba(254, 44, 85, 0.08); }
+
+        .file-upload-zone {
+            border: 2px dashed #333;
+            border-radius: 24px;
+            cursor: pointer;
+            padding: 2rem;
+            transition: all 0.3s;
+            background: #0a0a0a;
+            position: relative;
+            overflow: hidden;
+        }
+        .file-upload-zone:hover { border-color: #FE2C55; background: #111; }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-slide { animation: slideUp 0.5s ease-out forwards; }
+
+        .metric-card {
+            background: #121212;
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 20px;
+            padding: 24px;
+            transition: transform 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+        .metric-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.1); }
+
+        /* Chart Tooltip */
+        .chart-tooltip {
+            position: absolute;
+            background: rgba(18, 18, 18, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 8px 12px;
+            border-radius: 8px;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            margin-top: -10px;
+            z-index: 50;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .chart-tooltip.visible { opacity: 1; }
+        .chart-dot {
+            r: 4;
+            fill: #000;
+            stroke: #FE2C55;
+            stroke-width: 2;
+            opacity: 0;
+            transition: opacity 0.1s;
+        }
+        .chart-dot.visible { opacity: 1; }
+
+    </style>
+</head>
+<body class="antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // --- UTILS ---
+        const formatDate = (date) => new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'short' }).format(date);
+        
+        const generateChartData = (days, baseFollowers, volatility = 0.5) => {
+            const data = [];
+            let current = baseFollowers;
+            const today = new Date();
+            
+            // Generate backwards
+            for (let i = days - 1; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                
+                // Random daily fluctuation
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                const dailyGrowth = (Math.random() * 1000 + 500) * (isWeekend ? 1.5 : 1) * volatility;
+                
+                // Subtract because we are going backwards in time for the calculation logic 
+                // but actually we want the 'current' to be the end value.
+                // Let's generate forward from a starting point instead.
+            }
+            
+            // Better approach: Start from (Base - estimated growth) and grow to Base
+            let startValue = baseFollowers - (days * 1200 * volatility); 
+            
+            const result = [];
+            for (let i = 0; i < days; i++) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - (days - 1 - i));
+                
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                const spike = Math.random() > 0.9 ? 3 : 1;
+                const dailyGain = (Math.random() * 800 + 200) * (isWeekend ? 1.8 : 1) * spike * volatility;
+                
+                startValue += dailyGain;
+                
+                result.push({
+                    date: date,
+                    label: formatDate(date),
+                    value: Math.floor(startValue),
+                    dailyGain: Math.floor(dailyGain)
+                });
+            }
+            return result;
+        };
+
+        const App = () => {
+            const [step, setStep] = useState('config'); 
+            const [config, setConfig] = useState({
+                username: 'Sara_Trend',
+                followers: 1250000,
+                profilePic: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=256&h=256&auto=format&fit=crop'
+            });
+
+            if (step === 'config') return <ConfigStep onGenerate={(d) => { setConfig(d); setStep('dashboard'); }} defaultData={config} />;
+            return <TikTokDashboard config={config} onBack={() => setStep('config')} />;
+        };
+
+        const ConfigStep = ({ onGenerate, defaultData }) => {
+            const [local, setLocal] = useState(defaultData);
+            const [preview, setPreview] = useState(defaultData.profilePic);
+
+            const handleImageChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setPreview(reader.result);
+                        setLocal(prev => ({ ...prev, profilePic: reader.result }));
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 bg-black">
+                    <div className="w-full max-w-md space-y-8 p-10 border border-zinc-800 rounded-[40px] bg-zinc-950 shadow-2xl animate-slide">
+                        <div className="flex flex-col items-center gap-2 text-center">
+                            <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center border border-zinc-800">
+                                <svg width="24" height="24" viewBox="0 0 448 512" fill="white"><path d="M448 209.91a210.06 210.06 0 0 1-122.77-39.25V349.38A162.55 162.55 0 1 1 185 188.31V278.2a74.62 74.62 0 1 0 52.23 71.18V0l88 0a121.18 121.18 0 0 0 1.86 22.17h0A122.18 122.18 0 0 0 381 102.39a121.43 121.43 0 0 0 67 20.14Z"/></svg>
+                            </div>
+                            <h1 className="text-2xl font-extrabold tracking-tight mt-2 text-white">TikTok Creator</h1>
+                            <p className="text-zinc-500 text-xs font-medium">Configurez votre simulation</p>
+                        </div>
+                        <div className="space-y-6">
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2 ml-1">@Username</label>
+                                <div className="relative group">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 font-bold group-focus-within:text-white transition-colors">@</span>
+                                    <input 
+                                        type="text" 
+                                        className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-4 pl-10 text-white outline-none focus:border-tiktok-red transition-all font-bold placeholder-zinc-700" 
+                                        value={local.username} 
+                                        onChange={e => setLocal({...local, username: e.target.value})}
+                                        placeholder="username"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2 ml-1">Objectif Abonnés (Total)</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-white outline-none focus:border-tiktok-red transition-all text-xl font-black tabular-nums" 
+                                    value={local.followers} 
+                                    onChange={e => setLocal({...local, followers: parseInt(e.target.value) || 0})} 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2 ml-1">Photo de profil</label>
+                                <label className="file-upload-zone group">
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                                    <div className="flex items-center gap-4">
+                                        <div className="relative">
+                                            <img src={preview} className="w-16 h-16 rounded-full object-cover border-2 border-zinc-700 group-hover:border-tiktok-red transition-colors shadow-lg" />
+                                            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <svg width="20" height="20" fill="none" stroke="white" strokeWidth="2" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4"/></svg>
+                                            </div>
+                                        </div>
+                                        <div className="text-left">
+                                            <p className="text-sm font-bold text-white group-hover:text-tiktok-red transition-colors">Importer une image</p>
+                                            <p className="text-[10px] text-zinc-500">JPG, PNG supportés</p>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                            <button onClick={() => onGenerate(local)} className="w-full bg-white text-black py-4 rounded-2xl font-black hover:bg-zinc-200 hover:scale-[1.02] active:scale-[0.98] transition-all shadow-xl text-base tracking-tight">
+                                Générer l'interface
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const TikTokDashboard = ({ config, onBack }) => {
+            const [activeTab, setActiveTab] = useState('Analyses');
+            const [period, setPeriod] = useState(7); // 7, 28, 60
+            const [hoverData, setHoverData] = useState(null);
+            
+            // Generate data based on total followers
+            const chartData = useMemo(() => {
+                return generateChartData(period, config.followers, period === 7 ? 0.8 : 0.4);
+            }, [period, config.followers]);
+
+            // Derived stats
+            const currentStats = useMemo(() => {
+                const last = chartData[chartData.length - 1];
+                const first = chartData[0];
+                const growth = last.value - first.value;
+                const percent = ((growth / first.value) * 100).toFixed(1);
+                
+                // Simulate views based on follower count (approx 10-30% engagement)
+                const views = Math.floor(last.value * (Math.random() * 0.2 + 0.1)); 
+                const likes = Math.floor(views * (Math.random() * 0.1 + 0.05));
+                const profileViews = Math.floor(views * 0.02);
+
+                return {
+                    followers: last.value,
+                    growth,
+                    growthPercent: percent,
+                    views,
+                    likes,
+                    profileViews
+                };
+            }, [chartData]);
+
+            // Chart Drawing Logic
+            const { path, areaPath, points } = useMemo(() => {
+                if (chartData.length === 0) return { path: '', areaPath: '', points: [] };
+                
+                const min = Math.min(...chartData.map(d => d.value));
+                const max = Math.max(...chartData.map(d => d.value));
+                const range = max - min || 1;
+                
+                // SVG dimensions: 1000 x 200
+                // Padding Y: 20
+                const getX = (i) => (i / (chartData.length - 1)) * 1000;
+                const getY = (v) => 180 - ((v - min) / range) * 160; // Keep some padding
+                
+                let d = `M ${getX(0)} ${getY(chartData[0].value)}`;
+                const pts = [];
+
+                for (let i = 0; i < chartData.length; i++) {
+                    const x = getX(i);
+                    const y = getY(chartData[i].value);
+                    pts.push({ x, y, data: chartData[i] });
+                    
+                    if (i > 0) {
+                        // Bezier control points for smoothness
+                        const prevX = getX(i - 1);
+                        const prevY = getY(chartData[i - 1].value);
+                        const cp1x = prevX + (x - prevX) * 0.5;
+                        const cp1y = prevY;
+                        const cp2x = x - (x - prevX) * 0.5;
+                        const cp2y = y;
+                        d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x} ${y}`;
+                    }
+                }
+                
+                const area = `${d} L 1000 250 L 0 250 Z`;
+                return { path: d, areaPath: area, points: pts };
+            }, [chartData]);
+
+            const handleMouseMove = (e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                // Find closest point
+                const svgWidth = rect.width;
+                const index = Math.round((x / svgWidth) * (chartData.length - 1));
+                const safeIndex = Math.max(0, Math.min(index, chartData.length - 1));
+                setHoverData(points[safeIndex]);
+            };
+
+            const formatNumber = (num) => {
+                if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                return num.toString();
+            };
+
+            return (
+                <div className="flex h-screen w-full bg-black overflow-hidden animate-slide text-white selection:bg-tiktok-red selection:text-white">
+                    {/* Sidebar */}
+                    <aside className="w-[260px] flex flex-col shrink-0 border-r border-zinc-900 bg-tiktok-dark pt-6 z-20">
+                        <div className="px-6 mb-8 flex items-center gap-3">
+                             <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+                                <svg width="20" height="20" viewBox="0 0 448 512" fill="black"><path d="M448 209.91a210.06 210.06 0 0 1-122.77-39.25V349.38A162.55 162.55 0 1 1 185 188.31V278.2a74.62 74.62 0 1 0 52.23 71.18V0l88 0a121.18 121.18 0 0 0 1.86 22.17h0A122.18 122.18 0 0 0 381 102.39a121.43 121.43 0 0 0 67 20.14Z"/></svg>
+                             </div>
+                            <span className="text-lg font-black tracking-tight">TikTok <span className="font-medium opacity-50">Studio</span></span>
+                        </div>
+
+                        <nav className="flex-1 space-y-1">
+                            <NavItem label="Accueil" icon="home" onClick={() => {}} />
+                            <NavItem label="Analyses" icon="chart" active={activeTab === 'Analyses'} onClick={() => setActiveTab('Analyses')} />
+                            <NavItem label="Commentaires" icon="chat" onClick={() => {}} />
+                            <NavItem label="Monétisation" icon="dollar" onClick={() => {}} />
+                            <div className="h-[1px] bg-zinc-900 my-4 mx-6" />
+                            <NavItem label="Paramètres" icon="settings" onClick={() => {}} />
+                        </nav>
+                        
+                        <div className="p-6">
+                            <button onClick={onBack} className="flex items-center gap-2 text-zinc-600 hover:text-white transition-colors text-[11px] font-bold uppercase tracking-widest group">
+                                <span className="group-hover:-translate-x-1 transition-transform">←</span>
+                                Retour Éditeur
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* Main Content */}
+                    <main className="flex-1 flex flex-col overflow-y-auto no-scrollbar bg-black relative">
+                        {/* Header */}
+                        <header className="h-16 flex items-center justify-between px-8 border-b border-zinc-900 sticky top-0 bg-black/80 backdrop-blur-xl z-40">
+                            <div className="flex items-center gap-4">
+                                <h2 className="text-xl font-bold">Analyses</h2>
+                                <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-500">LAST UPDATED: JUST NOW</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="text-right hidden sm:block leading-tight">
+                                    <p className="text-sm font-bold text-white flex items-center justify-end gap-1">
+                                        @{config.username}
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="#20D5EC"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    </p>
+                                    <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wide">Compte Créateur</p>
+                                </div>
+                                <img src={config.profilePic} className="w-9 h-9 rounded-full border border-zinc-800 object-cover" />
+                            </div>
+                        </header>
+
+                        <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
+                            
+                            {/* Time Filter */}
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-lg font-bold">Vue d'ensemble</h3>
+                                <div className="bg-zinc-900 p-1 rounded-lg flex items-center gap-1 border border-zinc-800">
+                                    {[7, 28, 60].map(d => (
+                                        <button 
+                                            key={d}
+                                            onClick={() => setPeriod(d)}
+                                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${period === d ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                        >
+                                            {d} jours
+                                        </button>
+                                    ))}
+                                    <button className="px-4 py-1.5 rounded-md text-xs font-bold text-zinc-500 hover:text-zinc-300 flex items-center gap-2">
+                                        Personnalisé
+                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M19 9l-7 7-7-7"/></svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Key Stats Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <MetricCard 
+                                    label="Vues de vidéos" 
+                                    value={formatNumber(currentStats.views)} 
+                                    trend="+12.4%" 
+                                />
+                                <MetricCard 
+                                    label="Abonnés" 
+                                    value={formatNumber(currentStats.followers)} 
+                                    trend={`+${formatNumber(currentStats.growth)}`} 
+                                    trendUp={true}
+                                    color="text-white" 
+                                />
+                                <MetricCard 
+                                    label="Vues du profil" 
+                                    value={formatNumber(currentStats.profileViews)} 
+                                    trend="-1.2%" 
+                                    trendUp={false}
+                                />
+                                <MetricCard 
+                                    label="J'aime" 
+                                    value={formatNumber(currentStats.likes)} 
+                                    trend="+5.8%" 
+                                />
+                            </div>
+
+                            {/* Main Chart Area */}
+                            <div className="bg-tiktok-card p-6 rounded-[24px] border border-zinc-800 shadow-xl relative overflow-hidden">
+                                <div className="flex items-center justify-between mb-8 relative z-10">
+                                    <div>
+                                        <h3 className="text-base font-bold flex items-center gap-2">
+                                            Croissance des abonnés
+                                            <svg className="text-zinc-600 cursor-help" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+                                        </h3>
+                                        <p className="text-zinc-500 text-xs font-medium mt-1">{period} derniers jours</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-2xl font-black tracking-tighter">{formatNumber(currentStats.followers)}</p>
+                                        <p className="text-xs font-bold text-tiktok-cyan flex items-center justify-end gap-1">
+                                            +{currentStats.growthPercent}%
+                                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="M5 12l7-7 7 7"/></svg>
+                                        </p>
+                                    </div>
+                                </div>
+                                
+                                {/* Chart */}
+                                <div className="h-[280px] w-full relative group cursor-crosshair" onMouseMove={handleMouseMove} onMouseLeave={() => setHoverData(null)}>
+                                    <svg className="w-full h-full overflow-visible" viewBox="0 0 1000 200" preserveAspectRatio="none">
+                                        <defs>
+                                            <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#FE2C55" stopOpacity="0.2" />
+                                                <stop offset="100%" stopColor="#FE2C55" stopOpacity="0" />
+                                            </linearGradient>
+                                        </defs>
+                                        
+                                        {/* Grid Lines */}
+                                        <g className="opacity-10">
+                                            <line x1="0" y1="50" x2="1000" y2="50" stroke="white" strokeDasharray="4" />
+                                            <line x1="0" y1="100" x2="1000" y2="100" stroke="white" strokeDasharray="4" />
+                                            <line x1="0" y1="150" x2="1000" y2="150" stroke="white" strokeDasharray="4" />
+                                        </g>
+
+                                        <path d={areaPath} fill="url(#chartGrad)" />
+                                        <path d={path} fill="none" stroke="#FE2C55" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                                        
+                                        {/* Hover Indicator */}
+                                        {hoverData && (
+                                            <g>
+                                                <line 
+                                                    x1={hoverData.x} y1="0" 
+                                                    x2={hoverData.x} y2="200" 
+                                                    stroke="white" strokeWidth="1" strokeDasharray="4" opacity="0.5" 
+                                                />
+                                                <circle cx={hoverData.x} cy={hoverData.y} className="chart-dot visible" />
+                                            </g>
+                                        )}
+                                    </svg>
+                                    
+                                    {/* Tooltip HTML Overlay */}
+                                    <div 
+                                        className={`chart-tooltip ${hoverData ? 'visible' : ''}`}
+                                        style={{ 
+                                            left: hoverData ? `${(hoverData.x / 1000) * 100}%` : '50%', 
+                                            top: hoverData ? `${(hoverData.y / 200) * 100}%` : '50%'
+                                        }}
+                                    >
+                                        {hoverData && (
+                                            <>
+                                                <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1">{formatDate(hoverData.data.date)}</p>
+                                                <p className="text-sm font-black text-white tabular-nums flex items-center gap-2">
+                                                    {hoverData.data.value.toLocaleString('fr-FR')}
+                                                    <span className="text-[9px] text-green-400 bg-green-400/10 px-1 rounded">+{hoverData.data.dailyGain}</span>
+                                                </p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                <div className="flex justify-between mt-4 px-2 border-t border-white/5 pt-4">
+                                    {chartData.filter((_, i) => i % Math.ceil(chartData.length / 6) === 0).map((d, i) => (
+                                        <span key={i} className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{d.label}</span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Secondary Stats */}
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                <div className="bg-tiktok-card p-6 rounded-[24px] border border-zinc-800">
+                                    <h3 className="font-bold mb-6 flex items-center gap-2 text-sm">
+                                        Démographie
+                                    </h3>
+                                    <div className="space-y-5">
+                                        <LocationRow label="France" percent={68} />
+                                        <LocationRow label="Belgique" percent={14} />
+                                        <LocationRow label="Suisse" percent={9} />
+                                        <LocationRow label="Canada" percent={5} />
+                                    </div>
+                                </div>
+                                <div className="bg-tiktok-card p-6 rounded-[24px] border border-zinc-800">
+                                    <h3 className="font-bold mb-6 flex items-center gap-2 text-sm">
+                                        Genre
+                                    </h3>
+                                    <div className="flex items-center justify-center gap-8 h-[160px]">
+                                        <div className="relative w-32 h-32">
+                                            <svg className="w-full h-full transform -rotate-90">
+                                                <circle cx="64" cy="64" r="56" fill="none" stroke="#252525" strokeWidth="12" />
+                                                <circle cx="64" cy="64" r="56" fill="none" stroke="#FE2C55" strokeWidth="12" strokeDasharray="351" strokeDashoffset="100" strokeLinecap="round" />
+                                            </svg>
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                <span className="text-2xl font-black">72%</span>
+                                                <span className="text-[10px] text-zinc-500 font-bold uppercase">Femmes</span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2 text-xs font-bold">
+                                                <div className="w-3 h-3 rounded-full bg-tiktok-red"></div>
+                                                Femmes (72%)
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs font-bold text-zinc-500">
+                                                <div className="w-3 h-3 rounded-full bg-zinc-800"></div>
+                                                Hommes (28%)
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const MetricCard = ({ label, value, trend, color = "text-white", trendUp = true }) => (
+            <div className="metric-card group">
+                <div className="flex justify-between items-start mb-3">
+                    <p className="text-zinc-500 text-[11px] font-bold uppercase tracking-widest">{label}</p>
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                         <svg width="14" height="14" className="text-zinc-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8m-4-4h8"/></svg>
+                    </div>
+                </div>
+                <div className="flex items-end gap-3">
+                    <h4 className={`text-3xl font-black tracking-tighter ${color}`}>{value}</h4>
+                </div>
+                <div className={`text-[11px] font-bold mt-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md ${trendUp ? 'text-green-400 bg-green-400/5' : 'text-red-400 bg-red-400/5'}`}>
+                    {trendUp ? '↑' : '↓'} {trend}
+                    <span className="text-zinc-600 font-normal ml-1">vs 7j préc.</span>
+                </div>
+            </div>
+        );
+
+        const LocationRow = ({ label, percent }) => (
+            <div className="flex items-center gap-4 group cursor-default">
+                <span className="text-[11px] font-bold text-zinc-500 w-16 group-hover:text-white transition-colors">{label}</span>
+                <div className="flex-1 h-2 bg-zinc-900 rounded-full overflow-hidden relative border border-zinc-800/50">
+                    <div className="bg-white h-full group-hover:bg-tiktok-cyan transition-all duration-500 ease-out" style={{ width: `${percent}%` }}></div>
+                </div>
+                <span className="text-[11px] font-black w-8 text-right tabular-nums text-zinc-600 group-hover:text-white transition-colors">{percent}%</span>
+            </div>
+        );
+
+        const NavItem = ({ label, icon, active, onClick }) => {
+            const icons = {
+                home: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>,
+                chart: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>,
+                chat: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>,
+                dollar: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.407 2.651 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.407-2.651-1M12 16V7"/></svg>,
+                settings: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24"><path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            };
+            return (
+                <div onClick={onClick} className={`nav-item ${active ? 'active' : ''}`}>
+                    <span className="mr-4 opacity-70 transition-opacity group-hover:opacity-100">{icons[icon]}</span>
+                    <span>{label}</span>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shopify Admin - Analytique en direct</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            margin: 0; 
+            background-color: #f1f1f1; 
+            color: #202223; 
+            overflow: hidden; 
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .bg-shopify-top { background-color: #1a1c1d; }
+        .bg-shopify-sidebar { background-color: #ebebeb; }
+        .bg-shopify-card { background-color: #ffffff; border: 1px solid #e1e3e5; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        
+        .sidebar-link {
+            display: flex;
+            align-items: center;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #202223;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.1s;
+        }
+        .sidebar-link:hover { background: #e1e3e5; }
+        .sidebar-link.active { background: #ffffff; box-shadow: 0 1px 2px rgba(0,0,0,0.1); font-weight: 600; }
+
+        .btn-primary { background: #008060; color: white; padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: 13px; transition: background 0.2s; }
+        .btn-primary:hover { background: #006e52; }
+
+        .metric-value { font-size: 18px; font-weight: 700; color: #202223; letter-spacing: -0.01em; }
+        
+        .file-upload-zone {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border: 1px dashed #babfc3;
+            border-radius: 12px;
+            cursor: pointer;
+            padding: 1rem;
+            transition: all 0.2s;
+            background: #fafafa;
+            width: 100%;
+        }
+        .file-upload-zone:hover { border-color: #008060; background: #f1f8f5; }
+
+        @keyframes pulse-green {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.95); opacity: 0.5; }
+        }
+        .live-dot { width: 8px; height: 8px; background: #008060; border-radius: 50%; animation: pulse-green 2s infinite; }
+
+        .animate-fade { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        const App = () => {
+            const [step, setStep] = useState('config');
+            const [config, setConfig] = useState({
+                totalRevenue: 48250.00,
+                storeName: 'Maison Éclat',
+                storeLogo: 'https://images.unsplash.com/photo-1599305090598-fe179d501227?q=80&w=128&h=128&auto=format&fit=crop'
+            });
+
+            if (step === 'config') return <ConfigStep onGenerate={(d) => { setConfig(d); setStep('dashboard'); }} defaultData={config} />;
+            return <ShopifyDashboard config={config} onBack={() => setStep('config')} />;
+        };
+
+        const ConfigStep = ({ onGenerate, defaultData }) => {
+            const [local, setLocal] = useState(defaultData);
+            const [preview, setPreview] = useState(defaultData.storeLogo);
+
+            const handleLogoChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setPreview(reader.result);
+                        setLocal(prev => ({ ...prev, storeLogo: reader.result }));
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 bg-[#f1f1f1]">
+                    <div className="w-full max-w-md bg-white p-10 rounded-2xl shadow-xl border border-zinc-200 animate-fade">
+                        <div className="mb-8 text-center">
+                            <svg className="w-12 h-12 mx-auto mb-4" viewBox="0 0 40 40" fill="none">
+                                <path d="M33.05 13.05l-3.3-8.82c-.37-.99-1.2-1.23-1.85-.53l-2.6 2.8c-.46.5-.46 1.32 0 1.82l.85.92c.46.5.46 1.32 0 1.82l-5.65 6.1c-.46.5-1.21.5-1.67 0l-5.65-6.1c-.46-.5-.46-1.32 0-1.82l.85-.92c.46-.5.46-1.32 0-1.82l-2.6-2.8c-.65-.7-1.48-.46-1.85.53l-3.3 8.82c-.37.99-.18 2.05.5 2.62l16.1 13.52c.44.37 1.06.37 1.5 0L32.55 15.67c.68-.57.87-1.63.5-2.62z" fill="#95BF47"/>
+                            </svg>
+                            <h1 className="text-2xl font-bold text-zinc-900">Configurateur Shopify</h1>
+                            <p className="text-sm text-zinc-500 mt-1">Générez vos statistiques de vente</p>
+                        </div>
+                        
+                        <div className="space-y-5">
+                            <div>
+                                <label className="text-xs font-semibold text-zinc-700 uppercase mb-2 block">Nom de la boutique</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full border border-zinc-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#008060] outline-none" 
+                                    value={local.storeName} 
+                                    onChange={e => setLocal({...local, storeName: e.target.value})} 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-zinc-700 uppercase mb-2 block">Ventes Totales ($)</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full border border-zinc-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-[#008060] outline-none font-mono" 
+                                    value={local.totalRevenue} 
+                                    onChange={e => setLocal({...local, totalRevenue: parseFloat(e.target.value) || 0})} 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-zinc-700 uppercase mb-2 block">Logo Boutique</label>
+                                <label className="file-upload-zone">
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleLogoChange} />
+                                    <img src={preview} className="w-10 h-10 rounded border border-zinc-200" />
+                                    <div className="flex-1">
+                                        <p className="text-xs font-bold text-zinc-800">Téléverser le logo</p>
+                                        <p className="text-[10px] text-zinc-500">Formats PNG ou JPG supportés</p>
+                                    </div>
+                                </label>
+                            </div>
+                            <button onClick={() => onGenerate(local)} className="w-full btn-primary py-3.5 text-base mt-4">
+                                Accéder au dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ShopifyDashboard = ({ config, onBack }) => {
+            const [visitors, setVisitors] = useState(124);
+
+            useEffect(() => {
+                const interval = setInterval(() => {
+                    setVisitors(prev => Math.max(80, prev + Math.floor(Math.random() * 7) - 3));
+                }, 4000);
+                return () => clearInterval(interval);
+            }, []);
+
+            // Math pour les stats
+            const aov = 64.50; // Panier moyen
+            const totalOrders = Math.floor(config.totalRevenue / aov);
+            const conversionRate = 3.42;
+            const totalSessions = Math.floor(totalOrders / (conversionRate / 100));
+
+            return (
+                <div className="flex flex-col h-screen w-full select-none">
+                    {/* TOP BAR */}
+                    <div className="bg-shopify-top h-12 flex items-center px-4 shrink-0 gap-4 z-50">
+                        <div className="flex items-center gap-2 mr-4 cursor-pointer" onClick={onBack}>
+                           <svg className="w-7 h-7" viewBox="0 0 40 40" fill="none"><path d="M33.05 13.05l-3.3-8.82c-.37-.99-1.2-1.23-1.85-.53l-2.6 2.8c-.46.5-.46 1.32 0 1.82l.85.92c.46.5.46 1.32 0 1.82l-5.65 6.1c-.46.5-1.21.5-1.67 0l-5.65-6.1c-.46-.5-.46-1.32 0-1.82l.85-.92c.46-.5.46-1.32 0-1.82l-2.6-2.8c-.65-.7-1.48-.46-1.85.53l-3.3 8.82c-.37.99-.18 2.05.5 2.62l16.1 13.52c.44.37 1.06.37 1.5 0L32.55 15.67c.68-.57.87-1.63.5-2.62z" fill="#95BF47"/></svg>
+                           <span className="text-white font-bold text-sm tracking-tight">Shopify</span>
+                        </div>
+                        <div className="flex-1 max-w-xl flex items-center bg-[#303335] rounded-md h-8 px-3 gap-2">
+                           <svg width="14" height="14" fill="#BABFC3" viewBox="0 0 24 24"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM21 21l-4.35-4.35"/></svg>
+                           <input type="text" placeholder="Rechercher" className="bg-transparent border-none text-white text-xs outline-none w-full" />
+                        </div>
+                        <div className="ml-auto flex items-center gap-3">
+                           <div className="w-7 h-7 rounded-md bg-zinc-600 flex items-center justify-center text-white text-[10px] font-bold">ST</div>
+                           <span className="text-white text-xs font-medium">{config.storeName}</span>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-1 overflow-hidden">
+                        {/* SIDEBAR */}
+                        <aside className="w-60 bg-shopify-sidebar flex flex-col p-3 gap-1 shrink-0 border-r border-[#d2d5d8]">
+                            <SidebarLink label="Accueil" icon="home" />
+                            <SidebarLink label="Commandes" icon="orders" badge={totalOrders > 100 ? '99+' : totalOrders} />
+                            <SidebarLink label="Produits" icon="products" />
+                            <SidebarLink label="Clients" icon="customers" />
+                            <SidebarLink label="Analyses" icon="analytics" active />
+                            <SidebarLink label="Marketing" icon="marketing" />
+                            <SidebarLink label="Réductions" icon="discounts" />
+                            
+                            <div className="mt-6 px-3">
+                                <p className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider mb-2">Canaux de vente</p>
+                                <SidebarLink label="Boutique en ligne" icon="store" />
+                            </div>
+
+                            <div className="mt-auto px-3 py-2">
+                                <SidebarLink label="Paramètres" icon="settings" />
+                            </div>
+                        </aside>
+
+                        {/* MAIN CONTENT */}
+                        <main className="flex-1 bg-[#f1f1f1] overflow-y-auto no-scrollbar">
+                            <div className="max-w-6xl mx-auto p-8 space-y-6">
+                                
+                                <div className="flex justify-between items-center animate-fade">
+                                    <h2 className="text-xl font-bold">Analyses</h2>
+                                    <div className="flex gap-2">
+                                        <button className="bg-white border border-[#babfc3] rounded-md px-3 py-1.5 text-xs font-semibold hover:bg-[#f6f6f7]">Personnaliser</button>
+                                        <button className="btn-primary">Aujourd'hui</button>
+                                    </div>
+                                </div>
+
+                                {/* METRICS GRID */}
+                                <div className="grid grid-cols-3 gap-4 animate-fade" style={{animationDelay: '0.1s'}}>
+                                    <div className="bg-shopify-card p-5 space-y-2">
+                                        <div className="flex justify-between text-[13px]">
+                                            <span className="font-semibold underline decoration-dotted underline-offset-4">Ventes totales</span>
+                                            <span className="text-zinc-500">Aujourd'hui</span>
+                                        </div>
+                                        <div className="metric-value">${config.totalRevenue.toLocaleString('fr-FR', { minimumFractionDigits: 2 })}</div>
+                                        <div className="text-[13px] text-green-700 flex items-center gap-1 font-medium">
+                                            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
+                                            12 % <span className="text-zinc-500 font-normal">vs hier</span>
+                                        </div>
+                                    </div>
+                                    <div className="bg-shopify-card p-5 space-y-2">
+                                        <div className="flex justify-between text-[13px]">
+                                            <span className="font-semibold underline decoration-dotted underline-offset-4">Sessions</span>
+                                            <span className="text-zinc-500">Aujourd'hui</span>
+                                        </div>
+                                        <div className="metric-value">{totalSessions.toLocaleString('fr-FR')}</div>
+                                        <div className="text-[13px] text-green-700 flex items-center gap-1 font-medium">
+                                            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></svg>
+                                            8 % <span className="text-zinc-500 font-normal">vs hier</span>
+                                        </div>
+                                    </div>
+                                    <div className="bg-shopify-card p-5 space-y-2">
+                                        <div className="flex justify-between text-[13px]">
+                                            <span className="font-semibold underline decoration-dotted underline-offset-4">Taux de conversion</span>
+                                            <span className="text-zinc-500">Aujourd'hui</span>
+                                        </div>
+                                        <div className="metric-value">{conversionRate}%</div>
+                                        <div className="text-[13px] text-red-700 flex items-center gap-1 font-medium">
+                                            <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                                            0,5 % <span className="text-zinc-500 font-normal">vs hier</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-5 gap-4 animate-fade" style={{animationDelay: '0.15s'}}>
+                                    {/* LIVE VIEW MINI */}
+                                    <div className="col-span-3 bg-shopify-card overflow-hidden">
+                                        <div className="p-4 border-b border-[#e1e3e5] flex items-center gap-3">
+                                            <div className="live-dot"></div>
+                                            <span className="text-sm font-semibold">Vue en direct</span>
+                                            <span className="ml-auto text-xs text-zinc-500 font-medium">{visitors} visiteurs actifs</span>
+                                        </div>
+                                        <div className="h-[300px] bg-[#f9fafb] relative flex items-center justify-center">
+                                            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{backgroundImage: 'radial-gradient(#202223 1px, transparent 1px)', backgroundSize: '24px 24px'}}></div>
+                                            <div className="text-center">
+                                                <svg width="120" height="120" viewBox="0 0 100 100" className="opacity-20 mb-4 mx-auto">
+                                                    <circle cx="50" cy="50" r="45" stroke="#202223" strokeWidth="1" fill="none" />
+                                                    <circle cx="50" cy="50" r="25" stroke="#202223" strokeWidth="1" fill="none" />
+                                                </svg>
+                                                <p className="text-xs text-zinc-400 font-bold uppercase tracking-wider">Carte des ventes en temps réel</p>
+                                            </div>
+                                            {/* Simulated Sale Popup */}
+                                            <div className="absolute bottom-4 right-4 bg-white p-2 rounded shadow-lg border border-[#e1e3e5] animate-fade flex items-center gap-3">
+                                                <div className="w-8 h-8 bg-zinc-100 rounded flex items-center justify-center text-[10px] font-bold">📦</div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold">Nouvelle commande !</p>
+                                                    <p className="text-[9px] text-zinc-500">Paris, FR • $89.00</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* SALES BY CHANNEL */}
+                                    <div className="col-span-2 bg-shopify-card p-5 space-y-4">
+                                        <div className="flex justify-between">
+                                            <h3 className="text-sm font-bold">Ventes par canal</h3>
+                                            <svg width="16" height="16" fill="#BABFC3" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <ChannelRow label="Boutique en ligne" value={config.totalRevenue * 0.85} color="#008060" percent={85} />
+                                            <ChannelRow label="TikTok Shop" value={config.totalRevenue * 0.10} color="#ff0050" percent={10} />
+                                            <ChannelRow label="Instagram" value={config.totalRevenue * 0.05} color="#e1306c" percent={5} />
+                                        </div>
+                                        <div className="pt-4 border-t border-[#e1e3e5] mt-4">
+                                            <div className="flex justify-between text-xs font-semibold mb-2">
+                                                <span>Top Produits</span>
+                                                <span className="text-[#2c6ecb] cursor-pointer hover:underline">Voir tout</span>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <ProductItem label="Sérum Éclat Ultime" orders={Math.floor(totalOrders*0.4)} revenue={config.totalRevenue*0.35} />
+                                                <ProductItem label="Coffret Découverte" orders={Math.floor(totalOrders*0.25)} revenue={config.totalRevenue*0.28} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </main>
+                    </div>
+                </div>
+            );
+        };
+
+        const SidebarLink = ({ label, icon, active, badge }) => {
+            const icons = {
+                home: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>,
+                orders: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg>,
+                products: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>,
+                customers: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+                analytics: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>,
+                marketing: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.4-1.3 1"/><path d="m7 21 3-3 3 3M7 3l3 3 3-3"/></svg>,
+                discounts: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 2a4 4 0 0 0-3.5 2h7A4 4 0 0 0 11 2z"/><path d="M6 3v11a4 4 0 0 0 4 4h2a4 4 0 0 0 4-4V3"/></svg>,
+                store: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9 12 2l9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>,
+                settings: <svg width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            };
+            return (
+                <div className={`sidebar-link gap-2.5 ${active ? 'active' : ''}`}>
+                    <span className={active ? 'text-[#008060]' : 'text-zinc-600'}>{icons[icon]}</span>
+                    <span className="flex-1">{label}</span>
+                    {badge && <span className="text-[11px] font-bold text-zinc-500">{badge}</span>}
+                </div>
+            );
+        };
+
+        const ChannelRow = ({ label, value, color, percent }) => (
+            <div className="space-y-1.5">
+                <div className="flex justify-between text-[11px] font-semibold text-zinc-600">
+                    <span className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></div>
+                        {label}
+                    </span>
+                    <span>${value.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</span>
+                </div>
+                <div className="w-full h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                    <div className="h-full transition-all duration-1000" style={{ backgroundColor: color, width: `${percent}%` }}></div>
+                </div>
+            </div>
+        );
+
+        const ProductItem = ({ label, orders, revenue }) => (
+            <div className="flex items-center gap-3 group cursor-default">
+                <div className="w-10 h-10 bg-zinc-100 rounded border border-[#e1e3e5] flex-shrink-0"></div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-zinc-900 truncate group-hover:underline">{label}</p>
+                    <p className="text-[10px] text-zinc-500">{orders} ventes</p>
+                </div>
+                <div className="text-right">
+                    <p className="text-xs font-bold text-zinc-900">${revenue.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}</p>
+                </div>
+            </div>
+        );
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coinbase | Buy & Sell Bitcoin, Ethereum, and more</title>
+    <link rel="icon" href="https://images.ctfassets.net/q5ulk4bp65r7/3TBS4oVkD1ghowTqVQJlqj/2dfd4ea3b623a7c0d8deb2ff445dee9e/Consumer_Wordmark.svg" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #0A0B0D; 
+            color: #FFFFFF; 
+            overflow: hidden; 
+        }
+        
+        .bg-cb-dark { background-color: #0A0B0D; }
+        .bg-cb-card { background-color: #1E2025; } 
+        .bg-cb-blue { background-color: #0052FF; }
+        .text-cb-blue { color: #0052FF; }
+        .border-cb { border-color: #2B2D31; }
+        .hover-cb:hover { background-color: #2B2D31; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0A0B0D; }
+        ::-webkit-scrollbar-thumb { background: #2B2D31; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #444; }
+
+        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #2B2D31; transition: .3s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+        input:checked + .slider { background-color: #0052FF; }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        .chart-cursor-line { stroke: #5b5f67; stroke-width: 1; stroke-dasharray: 4; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+
+        // --- DATA & ASSETS ---
+        const LOGOS = {
+            btc: "https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=025",
+            eth: "https://cryptologos.cc/logos/ethereum-eth-logo.png?v=025",
+            sol: "https://cryptologos.cc/logos/solana-sol-logo.png?v=025",
+            usdc: "https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=025",
+            ada: "https://cryptologos.cc/logos/cardano-ada-logo.png?v=025",
+            dot: "https://cryptologos.cc/logos/polkadot-new-dot-logo.png?v=025",
+            doge: "https://cryptologos.cc/logos/dogecoin-doge-logo.png?v=025",
+            avax: "https://cryptologos.cc/logos/avalanche-avax-logo.png?v=025",
+            link: "https://cryptologos.cc/logos/chainlink-link-logo.png?v=025",
+            matic: "https://cryptologos.cc/logos/polygon-matic-logo.png?v=025"
+        };
+
+        const ASSETS_DB = [
+            { id: 'btc', name: 'Bitcoin', symbol: 'BTC', price: 64230.50, change: 2.4, color: '#F7931A', weight: 40, icon: LOGOS.btc },
+            { id: 'eth', name: 'Ethereum', symbol: 'ETH', price: 3450.10, change: 1.8, color: '#627EEA', weight: 30, icon: LOGOS.eth },
+            { id: 'sol', name: 'Solana', symbol: 'SOL', price: 145.20, change: 5.2, color: '#14F195', weight: 10, icon: LOGOS.sol },
+            { id: 'usdc', name: 'USDC', symbol: 'USDC', price: 1.00, change: 0.01, color: '#2775CA', weight: 5, icon: LOGOS.usdc },
+            { id: 'ada', name: 'Cardano', symbol: 'ADA', price: 0.45, change: -1.2, color: '#0033AD', weight: 5, icon: LOGOS.ada },
+            { id: 'dot', name: 'Polkadot', symbol: 'DOT', price: 7.20, change: 0.5, color: '#E6007A', weight: 5, icon: LOGOS.dot },
+            { id: 'avax', name: 'Avalanche', symbol: 'AVAX', price: 35.40, change: 3.1, color: '#E84142', weight: 5, icon: LOGOS.avax },
+            { id: 'link', name: 'Chainlink', symbol: 'LINK', price: 14.80, change: 1.5, color: '#2A5ADA', weight: 5, icon: LOGOS.link },
+            { id: 'doge', name: 'Dogecoin', symbol: 'DOGE', price: 0.12, change: -0.5, color: '#C2A633', weight: 2, icon: LOGOS.doge },
+            { id: 'matic', name: 'Polygon', symbol: 'MATIC', price: 0.70, change: 1.1, color: '#8247E5', weight: 3, icon: LOGOS.matic }
+        ];
+
+        const formatMoney = (amount) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(amount);
+        const formatCrypto = (amount, symbol) => `${amount.toLocaleString('en-US', { maximumFractionDigits: 6 })} ${symbol}`;
+
+        // --- COMPONENTS ---
+
+        const InteractiveChart = ({ totalBalance, timeframe }) => {
+            const [hoverData, setHoverData] = useState(null);
+            const [chartData, setChartData] = useState([]);
+            const [percentChange, setPercentChange] = useState(0);
+            const svgRef = useRef(null);
+
+            useEffect(() => {
+                const generateData = () => {
+                    const points = 100;
+                    const data = [];
+                    const now = new Date();
+                    let currentVal = totalBalance;
+                    
+                    let volatility = 0.002;
+                    let timeStep = 1000 * 60 * 60;
+                    
+                    switch(timeframe) {
+                        case '1H': volatility = 0.0005; timeStep = 1000 * 60; break;
+                        case '1J': volatility = 0.002; timeStep = 1000 * 60 * 15; break;
+                        case '1S': volatility = 0.008; timeStep = 1000 * 60 * 60 * 4; break;
+                        case '1M': volatility = 0.015; timeStep = 1000 * 60 * 60 * 24; break;
+                        case '1A': volatility = 0.04; timeStep = 1000 * 60 * 60 * 24 * 3; break;
+                        case 'Tout': volatility = 0.08; timeStep = 1000 * 60 * 60 * 24 * 7; break;
+                    }
+
+                    for (let i = 0; i < points; i++) {
+                        const date = new Date(now.getTime() - (i * timeStep));
+                        data.unshift({ value: currentVal, date: date });
+                        const change = 1 + (Math.random() - 0.5) * volatility;
+                        currentVal = currentVal / change;
+                    }
+                    return data;
+                };
+
+                const newData = generateData();
+                setChartData(newData);
+                
+                const startVal = newData[0].value;
+                const endVal = newData[newData.length - 1].value;
+                setPercentChange(((endVal - startVal) / startVal) * 100);
+
+            }, [totalBalance, timeframe]);
+
+            const handleMouseMove = (e) => {
+                if (!svgRef.current || chartData.length === 0) return;
+                const rect = svgRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const width = rect.width;
+                const index = Math.min(Math.max(Math.floor((x / width) * chartData.length), 0), chartData.length - 1);
+                setHoverData(chartData[index]);
+            };
+
+            const handleMouseLeave = () => setHoverData(null);
+
+            const getPath = () => {
+                if (chartData.length === 0) return "";
+                const maxVal = Math.max(...chartData.map(d => d.value));
+                const minVal = Math.min(...chartData.map(d => d.value));
+                const range = maxVal - minVal || 1;
+                
+                return chartData.map((d, i) => {
+                    const x = (i / (chartData.length - 1)) * 800;
+                    const y = 280 - ((d.value - minVal) / range) * 260; 
+                    return `${i === 0 ? 'M' : 'L'}${x},${y}`;
+                }).join(' ');
+            };
+
+            const isPositive = percentChange >= 0;
+            const displayValue = hoverData ? hoverData.value : totalBalance;
+            const displayDate = hoverData 
+                ? hoverData.date.toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+                : (timeframe === '1J' ? 'Dernières 24h' : timeframe === '1H' ? 'Dernière heure' : timeframe === '1S' ? '7 derniers jours' : timeframe === '1M' ? '30 derniers jours' : timeframe === '1A' ? 'Année écoulée' : 'Depuis le début');
+
+            return (
+                <section>
+                    <div className="mb-1 select-none">
+                        <p className="text-zinc-400 text-sm font-medium">{hoverData ? 'Prix à cette date' : 'Solde total'}</p>
+                        <div className="flex items-baseline gap-3 h-10">
+                            <h1 className="text-4xl font-bold tracking-tight">{formatMoney(displayValue)}</h1>
+                            <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${isPositive ? 'text-green-500 bg-green-500/10' : 'text-red-500 bg-red-500/10'}`}>
+                                {isPositive ? '+' : ''}{percentChange.toFixed(2)}% {hoverData ? '' : `(${displayDate})`}
+                            </span>
+                        </div>
+                        {hoverData && <p className="text-xs text-zinc-500 mt-1">{displayDate}</p>}
+                    </div>
+                    <div className="h-[280px] w-full mt-6 relative cursor-crosshair">
+                        <svg ref={svgRef} className="w-full h-full overflow-visible" viewBox="0 0 800 280" preserveAspectRatio="none" onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+                            <defs>
+                                <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="0%" stopColor={isPositive ? "#0052FF" : "#FF5252"} stopOpacity="0.2" />
+                                    <stop offset="100%" stopColor={isPositive ? "#0052FF" : "#FF5252"} stopOpacity="0" />
+                                </linearGradient>
+                            </defs>
+                            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="#1E2025" strokeDasharray="4" />
+                            <line x1="0" y1="50%" x2="100%" y2="50%" stroke="#1E2025" strokeDasharray="4" />
+                            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="#1E2025" strokeDasharray="4" />
+                            {chartData.length > 0 && (
+                                <>
+                                    <path d={`${getPath()} L800,280 L0,280 Z`} fill="url(#chartGradient)" />
+                                    <path d={getPath()} fill="none" stroke={isPositive ? "#0052FF" : "#FF5252"} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round" />
+                                </>
+                            )}
+                            {hoverData && (() => {
+                                const index = chartData.indexOf(hoverData);
+                                const x = (index / (chartData.length - 1)) * 800;
+                                const minVal = Math.min(...chartData.map(d => d.value));
+                                const maxVal = Math.max(...chartData.map(d => d.value));
+                                const y = 280 - ((hoverData.value - minVal) / (maxVal - minVal)) * 260;
+                                return (
+                                    <g>
+                                        <line x1={x} y1="0" x2={x} y2="280" className="chart-cursor-line" vectorEffect="non-scaling-stroke" />
+                                        <circle cx={x} cy={y} r="6" fill={isPositive ? "#0052FF" : "#FF5252"} stroke="#0A0B0D" strokeWidth="2" />
+                                    </g>
+                                );
+                            })()}
+                            <rect x="0" y="0" width="800" height="280" fill="transparent" />
+                        </svg>
+                    </div>
+                </section>
+            );
+        };
+
+        const ConfigScreen = ({ onStart }) => {
+            const [balance, setBalance] = useState(15000);
+            const [selectedAssets, setSelectedAssets] = useState(['btc', 'eth', 'sol', 'usdc']);
+            const [name, setName] = useState("John Doe");
+            const [profileImage, setProfileImage] = useState(null);
+            
+            const toggleAsset = (id) => {
+                if (selectedAssets.includes(id)) setSelectedAssets(selectedAssets.filter(a => a !== id));
+                else setSelectedAssets([...selectedAssets, id]);
+            };
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setProfileImage(reader.result);
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-cb-dark flex items-center justify-center p-4">
+                    <div className="w-full max-w-3xl bg-cb-card p-8 rounded-3xl border border-cb shadow-2xl animate-fade-in">
+                        <div className="text-center mb-8">
+                            <div className="w-12 h-12 bg-cb-blue rounded-full mx-auto mb-4 flex items-center justify-center">
+                                <span className="font-bold text-2xl">C</span>
+                            </div>
+                            <h1 className="text-2xl font-bold mb-2">Configurez votre Portfolio</h1>
+                            <p className="text-zinc-400">Personnalisez votre expérience Coinbase</p>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                            <div className="space-y-6">
+                                <div>
+                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Votre Profil</label>
+                                    <div className="flex items-center gap-4 bg-[#0A0B0D] p-3 rounded-xl border border-cb">
+                                        <div className="relative w-16 h-16 shrink-0 cursor-pointer group rounded-full overflow-hidden bg-zinc-800 border-2 border-zinc-700">
+                                            {profileImage ? (
+                                                <img src={profileImage} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-zinc-500">
+                                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                                                </div>
+                                            )}
+                                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                            </div>
+                                            <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <input type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-transparent border-b border-cb focus:border-cb-blue outline-none text-white py-1 font-medium placeholder-zinc-600" placeholder="Votre Nom" />
+                                            <p className="text-[10px] text-zinc-500 mt-1">Cliquez sur l'avatar pour changer</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Solde Total (€)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400">€</span>
+                                        <input type="number" value={balance} onChange={(e) => setBalance(parseFloat(e.target.value))} className="w-full bg-[#0A0B0D] border border-cb rounded-xl py-3 pl-8 pr-4 text-lg font-mono focus:border-cb-blue outline-none transition-colors" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">Actifs ({selectedAssets.length})</label>
+                                <div className="h-64 overflow-y-auto bg-[#0A0B0D] border border-cb rounded-xl p-2 pr-1">
+                                    {ASSETS_DB.map(asset => (
+                                        <div key={asset.id} className="flex items-center justify-between p-2 hover:bg-cb-card rounded-lg cursor-pointer" onClick={() => toggleAsset(asset.id)}>
+                                            <div className="flex items-center gap-3">
+                                                <img src={asset.icon} className="w-6 h-6 rounded-full" />
+                                                <span className="font-medium">{asset.name}</span>
+                                            </div>
+                                            <div className={`w-5 h-5 rounded border flex items-center justify-center ${selectedAssets.includes(asset.id) ? 'bg-cb-blue border-cb-blue' : 'border-zinc-600'}`}>
+                                                {selectedAssets.includes(asset.id) && <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5"/></svg>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                        <button onClick={() => onStart({ balance, assets: selectedAssets, name, avatar: profileImage })} className="w-full bg-cb-blue hover:bg-blue-600 text-white font-bold py-4 rounded-full transition-all transform active:scale-[0.99]">Lancer le Dashboard</button>
+                    </div>
+                </div>
+            );
+        };
+
+        const Dashboard = ({ config }) => {
+            const [activeTab, setActiveTab] = useState('home');
+            const [timeframe, setTimeframe] = useState('1J');
+            
+            const portfolio = useMemo(() => {
+                const selected = ASSETS_DB.filter(a => config.assets.includes(a.id));
+                const totalWeight = selected.reduce((acc, a) => acc + a.weight, 0);
+                
+                return selected.map(asset => {
+                    const noise = 0.9 + Math.random() * 0.2; 
+                    const share = (asset.weight / totalWeight) * noise;
+                    const value = config.balance * share;
+                    const amount = value / asset.price;
+                    return { ...asset, value, amount };
+                }).sort((a, b) => b.value - a.value);
+            }, [config]);
+
+            const totalBalance = portfolio.reduce((acc, curr) => acc + curr.value, 0);
+            const userInitials = config.name ? config.name.split(' ').map(n => n[0]).join('').substring(0,2).toUpperCase() : 'U';
+
+            // Calculate allocations for the My Assets view
+            const assetsWithAllocation = portfolio.map(asset => ({
+                ...asset,
+                allocation: (asset.value / totalBalance) * 100
+            }));
+
+            return (
+                <div className="flex h-screen bg-cb-dark text-white overflow-hidden">
+                    {/* SIDEBAR */}
+                    <aside className="w-[240px] border-r border-cb flex-col hidden md:flex shrink-0">
+                        <div className="p-6">
+                            <svg className="text-cb-blue w-32" viewBox="0 0 100 20" fill="currentColor">
+                                <text x="0" y="15" fontFamily="Arial" fontWeight="bold" fontSize="18">coinbase</text>
+                            </svg>
+                        </div>
+                        <nav className="flex-1 px-3 space-y-1">
+                            <NavItem icon="home" label="Accueil" active={activeTab === 'home'} onClick={() => setActiveTab('home')} />
+                            <NavItem icon="assets" label="Mes actifs" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
+                            <NavItem icon="trade" label="Trader" onClick={() => setActiveTab('trade')} active={activeTab === 'trade'} />
+                            <NavItem icon="earn" label="Earn" onClick={() => setActiveTab('earn')} active={activeTab === 'earn'} />
+                            <NavItem icon="learning" label="Learning Rewards" onClick={() => setActiveTab('learning')} active={activeTab === 'learning'} />
+                            <NavItem icon="web3" label="Web3" onClick={() => setActiveTab('web3')} active={activeTab === 'web3'} />
+                            <div className="pt-4 pb-2 px-3 text-xs font-bold text-zinc-500 uppercase">Autres</div>
+                            <NavItem icon="card" label="Card" onClick={() => setActiveTab('card')} active={activeTab === 'card'} />
+                            <NavItem icon="nft" label="NFT" onClick={() => setActiveTab('nft')} active={activeTab === 'nft'} />
+                        </nav>
+                        <div className="p-4 border-t border-cb">
+                            <div className="bg-cb-card rounded-xl p-4 border border-cb">
+                                <p className="text-sm font-bold mb-1">Obtenez 10 €</p>
+                                <p className="text-xs text-zinc-400 mb-3">Invitez un ami à rejoindre Coinbase.</p>
+                                <button className="text-xs font-bold text-cb-blue">Inviter des amis</button>
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* MAIN CONTENT */}
+                    <main className="flex-1 flex flex-col overflow-hidden">
+                        {/* HEADER */}
+                        <header className="h-16 border-b border-cb flex items-center justify-between px-6 bg-cb-dark z-10 shrink-0">
+                            <div className="flex items-center gap-4 text-zinc-400">
+                                <span className="text-white font-medium">{activeTab === 'home' ? 'Accueil' : activeTab === 'assets' ? 'Mes actifs' : 'Dashboard'}</span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <button className="bg-cb-blue text-white px-4 py-2 rounded-full text-sm font-bold">Acheter / Vendre</button>
+                                <div className="w-px h-6 bg-zinc-700"></div>
+                                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-500 to-blue-500 flex items-center justify-center text-xs font-bold overflow-hidden border border-white/10 cursor-pointer">
+                                    {config.avatar ? (
+                                        <img src={config.avatar} alt="Profile" className="w-full h-full object-cover" />
+                                    ) : (
+                                        userInitials
+                                    )}
+                                </div>
+                            </div>
+                        </header>
+
+                        {/* SCROLLABLE AREA */}
+                        <div className="flex-1 overflow-y-auto p-6 md:p-8">
+                            <div className="max-w-7xl mx-auto">
+                                
+                                {activeTab === 'home' ? (
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
+                                        <div className="lg:col-span-2 space-y-8">
+                                            <InteractiveChart totalBalance={totalBalance} timeframe={timeframe} />
+                                            <div className="flex gap-1 border-b border-cb pb-4">
+                                                {['1H', '1J', '1S', '1M', '1A', 'Tout'].map(t => (
+                                                    <button key={t} onClick={() => setTimeframe(t)} className={`px-3 py-1 text-xs font-bold rounded-full transition-colors ${timeframe === t ? 'text-cb-blue bg-blue-900/20' : 'text-zinc-500 hover:text-white'}`}>{t}</button>
+                                                ))}
+                                            </div>
+                                            <section>
+                                                <h3 className="text-xl font-medium mb-4">Vos actifs</h3>
+                                                <div className="bg-cb-card border border-cb rounded-xl overflow-hidden">
+                                                    <table className="w-full">
+                                                        <thead className="bg-[#151619] border-b border-cb text-left">
+                                                            <tr>
+                                                                <th className="px-6 py-4 text-xs font-medium text-zinc-500 uppercase">Nom</th>
+                                                                <th className="px-6 py-4 text-xs font-medium text-zinc-500 uppercase text-right">Prix</th>
+                                                                <th className="px-6 py-4 text-xs font-medium text-zinc-500 uppercase text-right">Variation</th>
+                                                                <th className="px-6 py-4 text-xs font-medium text-zinc-500 uppercase text-right">Solde</th>
+                                                                <th className="px-6 py-4 text-right"></th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {portfolio.slice(0, 5).map(asset => (
+                                                                <tr key={asset.id} className="border-b border-cb last:border-0 hover:bg-[#25272C] transition-colors cursor-pointer group">
+                                                                    <td className="px-6 py-4">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <img src={asset.icon} className="w-8 h-8 rounded-full" />
+                                                                            <div>
+                                                                                <div className="font-bold">{asset.name}</div>
+                                                                                <div className="text-xs text-zinc-500">{asset.symbol}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-right text-sm font-medium">{formatMoney(asset.price)}</td>
+                                                                    <td className={`px-6 py-4 text-right text-sm font-medium ${asset.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>{asset.change > 0 ? '+' : ''}{asset.change}%</td>
+                                                                    <td className="px-6 py-4 text-right">
+                                                                        <div className="font-bold text-sm">{formatMoney(asset.value)}</div>
+                                                                        <div className="text-xs text-zinc-500">{formatCrypto(asset.amount, asset.symbol)}</div>
+                                                                    </td>
+                                                                    <td className="px-6 py-4 text-right">
+                                                                        <button className="bg-[#0A0B0D] border border-cb px-4 py-2 rounded-full text-xs font-bold hover:border-white transition-colors opacity-0 group-hover:opacity-100">Acheter</button>
+                                                                    </td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <button onClick={() => setActiveTab('assets')} className="w-full py-4 text-sm font-bold text-zinc-400 hover:text-cb-blue transition-colors border-t border-transparent hover:border-cb border-dashed mt-2">Voir tous les actifs</button>
+                                            </section>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            <div className="bg-cb-card border border-cb rounded-xl p-6">
+                                                <div className="flex gap-2 mb-6 border-b border-cb pb-4">
+                                                    <button className="flex-1 pb-2 border-b-2 border-cb-blue text-cb-blue font-bold">Acheter</button>
+                                                    <button className="flex-1 pb-2 border-b-2 border-transparent text-zinc-500 font-bold hover:text-white">Vendre</button>
+                                                    <button className="flex-1 pb-2 border-b-2 border-transparent text-zinc-500 font-bold hover:text-white">Convertir</button>
+                                                </div>
+                                                <div className="space-y-4">
+                                                    <div className="flex items-center justify-between bg-[#0A0B0D] p-4 rounded-xl border border-cb cursor-pointer hover:border-zinc-500 transition-colors">
+                                                        <div className="text-2xl font-bold font-mono">100 €</div>
+                                                        <div className="flex items-center gap-2 bg-cb-card px-2 py-1 rounded-full text-xs font-bold border border-cb">
+                                                            <div className="w-2 h-2 rounded-full bg-zinc-400"></div>Paiement unique
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center justify-between bg-[#0A0B0D] p-4 rounded-xl border border-cb cursor-pointer hover:border-zinc-500 transition-colors">
+                                                        <div className="flex items-center gap-3"><img src={LOGOS.btc} className="w-6 h-6 rounded-full" /><span className="font-bold">Bitcoin</span></div>
+                                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                                                    </div>
+                                                    <button className="w-full bg-cb-blue py-4 rounded-full font-bold text-white hover:bg-blue-600 transition-colors mt-2">Acheter Bitcoin</button>
+                                                </div>
+                                            </div>
+                                            <div className="bg-cb-card border border-cb rounded-xl p-6">
+                                                <h4 className="font-bold mb-4 text-sm text-zinc-400 uppercase">Liste de surveillance</h4>
+                                                <div className="space-y-1">
+                                                    {ASSETS_DB.filter(a => !portfolio.find(p => p.id === a.id)).slice(0, 4).map(asset => (
+                                                        <div key={asset.id} className="flex items-center justify-between py-3 cursor-pointer hover:bg-[#2B2D31] px-2 -mx-2 rounded-lg transition-colors">
+                                                            <div className="flex items-center gap-3">
+                                                                <img src={asset.icon} className="w-6 h-6 rounded-full" />
+                                                                <span className="font-bold text-sm">{asset.name}</span>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <div className="text-sm font-medium">{formatMoney(asset.price)}</div>
+                                                                <div className={`text-xs ${asset.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>{asset.change > 0 ? '+' : ''}{asset.change}%</div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                ) : activeTab === 'assets' ? (
+                                    <div className="animate-fade-in space-y-8">
+                                        <div className="flex flex-col md:flex-row justify-between items-end gap-6">
+                                            <div>
+                                                <p className="text-zinc-400 font-medium mb-1">Solde total des actifs</p>
+                                                <h1 className="text-5xl font-bold tracking-tight">{formatMoney(totalBalance)}</h1>
+                                            </div>
+                                            <div className="bg-cb-card p-1 rounded-lg border border-cb flex gap-1">
+                                                <button className="px-4 py-1.5 bg-[#0A0B0D] rounded font-bold text-sm shadow-sm">Crypto</button>
+                                                <button className="px-4 py-1.5 text-zinc-400 hover:text-white font-bold text-sm transition-colors">NFT</button>
+                                                <button className="px-4 py-1.5 text-zinc-400 hover:text-white font-bold text-sm transition-colors">DeFi</button>
+                                            </div>
+                                        </div>
+
+                                        {/* Allocation Bar */}
+                                        <div className="w-full h-3 bg-[#151619] rounded-full overflow-hidden flex">
+                                            {assetsWithAllocation.map(asset => (
+                                                <div key={asset.id} style={{ width: `${asset.allocation}%`, backgroundColor: asset.color }} title={`${asset.name}: ${asset.allocation.toFixed(1)}%`}></div>
+                                            ))}
+                                        </div>
+
+                                        <div className="bg-cb-card border border-cb rounded-xl overflow-hidden shadow-xl">
+                                            <div className="p-4 border-b border-cb flex items-center gap-4 bg-[#1E2025]">
+                                                <svg className="text-zinc-500 w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                                <input type="text" placeholder="Rechercher un actif..." className="bg-transparent outline-none w-full text-sm font-medium placeholder-zinc-500" />
+                                            </div>
+                                            <table className="w-full">
+                                                <thead className="bg-[#151619] border-b border-cb text-left">
+                                                    <tr>
+                                                        <th className="px-6 py-4 text-xs font-medium text-zinc-500 uppercase w-1/3">Actif</th>
+                                                        <th className="px-6 py-4 text-xs font-medium text-zinc-500 uppercase text-right">Prix</th>
+                                                        <th className="px-6 py-4 text-xs font-medium text-zinc-500 uppercase text-right">Solde</th>
+                                                        <th className="px-6 py-4 text-xs font-medium text-zinc-500 uppercase text-right">Allocation</th>
+                                                        <th className="px-6 py-4 text-right"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {assetsWithAllocation.map(asset => (
+                                                        <tr key={asset.id} className="border-b border-cb last:border-0 hover:bg-[#25272C] transition-colors cursor-pointer group">
+                                                            <td className="px-6 py-4">
+                                                                <div className="flex items-center gap-4">
+                                                                    <img src={asset.icon} className="w-10 h-10 rounded-full" />
+                                                                    <div>
+                                                                        <div className="font-bold text-lg">{asset.name}</div>
+                                                                        <div className="text-sm text-zinc-500 font-mono">{asset.symbol}</div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <div className="text-sm font-bold">{formatMoney(asset.price)}</div>
+                                                                <div className={`text-xs font-medium ${asset.change >= 0 ? 'text-green-500' : 'text-red-500'}`}>{asset.change > 0 ? '+' : ''}{asset.change}%</div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <div className="font-bold">{formatMoney(asset.value)}</div>
+                                                                <div className="text-xs text-zinc-500 font-mono">{formatCrypto(asset.amount, asset.symbol)}</div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <div className="flex items-center justify-end gap-2">
+                                                                    <div className="text-sm font-bold">{asset.allocation.toFixed(2)}%</div>
+                                                                    <div className="w-16 h-1.5 bg-[#151619] rounded-full overflow-hidden">
+                                                                        <div className="h-full rounded-full" style={{ width: `${asset.allocation}%`, backgroundColor: asset.color }}></div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <button className="bg-cb-blue hover:bg-blue-600 text-white px-4 py-2 rounded-full text-xs font-bold transition-colors">Acheter</button>
+                                                                    <button className="bg-[#0A0B0D] hover:bg-white/10 border border-cb px-4 py-2 rounded-full text-xs font-bold transition-colors">Vendre</button>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-[60vh] text-zinc-500 animate-fade-in">
+                                        <div className="w-20 h-20 bg-cb-card rounded-full flex items-center justify-center mb-6">
+                                            <svg className="w-10 h-10 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
+                                        </div>
+                                        <h2 className="text-xl font-bold text-white mb-2">Section en construction</h2>
+                                        <p>Cette fonctionnalité arrivera bientôt dans une prochaine mise à jour.</p>
+                                    </div>
+                                )}
+
+                            </div>
+                            
+                            <footer className="max-w-7xl mx-auto mt-12 pt-8 border-t border-cb text-xs text-zinc-500 flex justify-between pb-8">
+                                <div>© 2024 Coinbase</div>
+                                <div className="flex gap-4">
+                                    <span>Confidentialité</span>
+                                    <span>Conditions</span>
+                                    <span>Support</span>
+                                </div>
+                            </footer>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const NavItem = ({ icon, label, active, onClick }) => {
+            const icons = {
+                home: <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z" />,
+                assets: <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />,
+                trade: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+                earn: <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />,
+                learning: <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />,
+                web3: <circle cx="12" cy="12" r="10" />,
+                card: <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />,
+                nft: <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+            };
+
+            return (
+                <div onClick={onClick} className={`flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-colors ${active ? 'text-cb-blue bg-cb-blue/10 font-bold' : 'text-zinc-400 hover:text-white hover:bg-cb-card'}`}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.5" : "2"} strokeLinecap="round" strokeLinejoin="round">
+                        {icons[icon]}
+                    </svg>
+                    <span className="text-sm font-medium">{label}</span>
+                </div>
+            );
+        }
+
+        const App = () => {
+            const [config, setConfig] = useState(null);
+
+            return (
+                <>
+                    {!config ? (
+                        <ConfigScreen onStart={(data) => setConfig(data)} />
+                    ) : (
+                        <Dashboard config={config} />
+                    )}
+                </>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

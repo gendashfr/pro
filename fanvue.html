@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fanvue Dashboard - Dynamique</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            margin: 0; 
+            background-color: #0d0d0d; 
+            color: #ffffff; 
+            overflow: hidden; 
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .bg-fanvue-dark { background-color: #0d0d0d; }
+        .bg-fanvue-card { background-color: #161616; }
+        .text-fanvue-coral { color: #ff6b7d; }
+        .bg-fanvue-coral { background-color: #ff6b7d; }
+        
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            color: #888;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 12px;
+            margin: 2px 12px;
+        }
+        .sidebar-item:hover { color: #ffffff; background-color: rgba(255,255,255,0.05); }
+        .sidebar-item.active { color: #ffffff; }
+
+        .earnings-card {
+            background-color: #ff6b7d;
+            border-radius: 24px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: transform 0.2s;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+        .earnings-card:hover { transform: translateY(-4px); filter: brightness(1.05); }
+        
+        /* Subtle pattern overlay for cards */
+        .earnings-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+            pointer-events: none;
+        }
+
+        .tab-pill {
+            padding: 8px 24px;
+            border-radius: 99px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.2s;
+            color: #888;
+        }
+        .tab-pill.active {
+            background-color: #ff6b7d;
+            color: #ffffff;
+        }
+        
+        /* CORRECTED UPLOAD ZONE CSS */
+        .file-upload-zone {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            border: 2px dashed #333;
+            border-radius: 24px;
+            cursor: pointer;
+            padding: 1.5rem;
+            transition: all 0.3s;
+            background: #111;
+            position: relative;
+            width: 100%; /* Ensure full width */
+            box-sizing: border-box; /* Include padding in width */
+        }
+        .file-upload-zone:hover { border-color: #ff6b7d; background: #1a1a1a; }
+
+        .chart-tooltip {
+            position: absolute;
+            background: #ff6b7d;
+            padding: 6px 12px;
+            border-radius: 8px;
+            pointer-events: none;
+            transform: translate(-50%, -100%);
+            margin-top: -12px;
+            box-shadow: 0 10px 25px -5px rgba(255, 107, 125, 0.5);
+            font-size: 12px;
+            font-weight: 800;
+            color: white;
+            z-index: 50;
+            white-space: nowrap;
+        }
+        .chart-tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: #ff6b7d transparent transparent transparent;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide { animation: slideUp 0.5s ease-out forwards; }
+    </style>
+</head>
+<body class="antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        // --- UTILS ---
+        const formatDate = (date) => new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+        
+        // Simulates daily data based on total revenue and volatility
+        const generateFinancialData = (days, totalRevenue) => {
+            const data = [];
+            const today = new Date();
+            let runningTotal = 0;
+            
+            // Base daily average needed to reach total
+            const dailyAvg = totalRevenue / days;
+            
+            for (let i = days - 1; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                
+                const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+                // Weekend multiplier: 1.5x revenue on weekends
+                const multiplier = isWeekend ? 1.5 : 0.8;
+                // Random noise +/- 30%
+                const noise = 0.7 + Math.random() * 0.6;
+                
+                const dailyVal = dailyAvg * multiplier * noise;
+                
+                data.push({
+                    date: date,
+                    label: date.toLocaleDateString('en-US', { weekday: 'short' }), // Fanvue uses EN format usually, keeping short
+                    fullDate: formatDate(date),
+                    value: dailyVal
+                });
+                runningTotal += dailyVal;
+            }
+            
+            // Normalize to match exact requested total (optional, but good for accuracy)
+            const scaleFactor = totalRevenue / runningTotal;
+            return data.map(d => ({ ...d, value: d.value * scaleFactor }));
+        };
+
+        const App = () => {
+            const [step, setStep] = useState('config'); 
+            const [config, setConfig] = useState({
+                totalRevenue: 15420.50,
+                username: 'Sophie_Exclusive',
+                profilePic: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=256&h=256&auto=format&fit=crop'
+            });
+
+            if (step === 'config') return <ConfigStep onGenerate={(d) => { setConfig(d); setStep('dashboard'); }} defaultData={config} />;
+            return <FanvueDashboard config={config} onBack={() => setStep('config')} />;
+        };
+
+        const ConfigStep = ({ onGenerate, defaultData }) => {
+            const [local, setLocal] = useState(defaultData);
+            const [preview, setPreview] = useState(defaultData.profilePic);
+
+            const handleImageChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setPreview(reader.result);
+                        setLocal(prev => ({ ...prev, profilePic: reader.result }));
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 bg-[#0d0d0d]">
+                    <div className="w-full max-w-md space-y-8 p-10 bg-[#161616] rounded-[40px] border border-white/5 shadow-2xl animate-slide">
+                        <div className="text-center space-y-2">
+                            <h1 className="text-4xl font-black text-[#ff6b7d] lowercase tracking-tighter">fanview.</h1>
+                            <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest">Creator Simulator</p>
+                        </div>
+                        <div className="space-y-6">
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2 ml-1">Revenu Total ($)</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full bg-[#0d0d0d] border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-[#ff6b7d] transition-all text-xl font-bold tabular-nums" 
+                                    value={local.totalRevenue} 
+                                    onChange={e => setLocal({...local, totalRevenue: parseFloat(e.target.value) || 0})} 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2 ml-1">Nom d'utilisateur</label>
+                                <input 
+                                    type="text" 
+                                    className="w-full bg-[#0d0d0d] border border-white/10 rounded-2xl p-4 text-white outline-none focus:border-[#ff6b7d] transition-all font-bold" 
+                                    value={local.username} 
+                                    onChange={e => setLocal({...local, username: e.target.value})} 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-2 ml-1">Photo de profil</label>
+                                <label className="file-upload-zone group">
+                                    <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                                    <div className="flex-shrink-0">
+                                        <img src={preview} className="w-14 h-14 rounded-full object-cover border-2 border-zinc-700 group-hover:border-[#ff6b7d] transition-colors" />
+                                    </div>
+                                    <div className="flex-1 text-left min-w-0">
+                                        <p className="text-sm font-bold text-white group-hover:text-[#ff6b7d] transition-colors truncate">Choisir une image</p>
+                                        <p className="text-[10px] text-zinc-500 truncate">JPG, PNG</p>
+                                    </div>
+                                </label>
+                            </div>
+                            <button onClick={() => onGenerate(local)} className="w-full bg-[#ff6b7d] text-white py-4 rounded-2xl font-bold hover:brightness-110 transition-all shadow-xl shadow-pink-900/20 text-lg">
+                                Générer Dashboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const FanvueDashboard = ({ config, onBack }) => {
+            const [activeTab, setActiveTab] = useState('Earnings');
+            const [period, setPeriod] = useState(30); // 7, 30, 90
+            const [hoveredData, setHoveredData] = useState(null);
+
+            // Generate main chart data
+            const chartData = useMemo(() => {
+                return generateFinancialData(period, config.totalRevenue);
+            }, [config.totalRevenue, period]);
+
+            // Calculate breakdowns based on total
+            const breakdown = useMemo(() => {
+                const t = config.totalRevenue;
+                return {
+                    subs: t * 0.45,
+                    tips: t * 0.15,
+                    msgs: t * 0.20,
+                    custom: t * 0.10,
+                    calls: t * 0.05,
+                    vip: t * 0.05
+                };
+            }, [config.totalRevenue]);
+
+            // Chart rendering math
+            const maxValue = Math.max(...chartData.map(d => d.value)) * 1.1; // +10% padding
+            const getX = (i) => (i / (chartData.length - 1)) * 100;
+            const getY = (v) => 100 - (v / maxValue * 85); // Leave space at bottom
+
+            const areaPath = useMemo(() => {
+                if (chartData.length < 2) return "";
+                let p = `M ${getX(0)} 100`;
+                for (let i = 0; i < chartData.length; i++) {
+                    const x = getX(i);
+                    const y = getY(chartData[i].value);
+                    p += ` L ${x} ${y}`;
+                }
+                p += ` L ${getX(chartData.length - 1)} 100 Z`;
+                return p;
+            }, [chartData, maxValue]);
+
+            const linePath = useMemo(() => {
+                if (chartData.length < 2) return "";
+                let p = `M ${getX(0)} ${getY(chartData[0].value)}`;
+                for (let i = 1; i < chartData.length; i++) {
+                    const x = getX(i);
+                    const y = getY(chartData[i].value);
+                    p += ` L ${x} ${y}`;
+                }
+                return p;
+            }, [chartData, maxValue]);
+
+            const handleMouseMove = (e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const idx = Math.round((x / rect.width) * (chartData.length - 1));
+                const safeIdx = Math.max(0, Math.min(idx, chartData.length - 1));
+                setHoveredData({ ...chartData[safeIdx], x: getX(safeIdx), y: getY(chartData[safeIdx].value) });
+            };
+
+            const formatMoney = (val) => val.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+            
+            // Determine date range strings
+            const startDate = chartData[0]?.fullDate || '';
+            const endDate = chartData[chartData.length-1]?.fullDate || '';
+
+            return (
+                <div className="flex h-screen w-full bg-fanvue-dark overflow-hidden selection:bg-[#ff6b7d] selection:text-white">
+                    {/* SIDEBAR */}
+                    <aside className="w-[260px] flex flex-col shrink-0 border-r border-white/5 pt-8 bg-[#0d0d0d] z-20">
+                        <div className="px-8 mb-10 flex items-center justify-between">
+                            <h1 className="text-2xl font-black text-[#ff6b7d] lowercase tracking-tighter cursor-pointer select-none" onClick={onBack}>fanview.</h1>
+                            <div className="flex gap-2">
+                                <button className="p-2 hover:bg-white/5 rounded-lg text-zinc-500 transition-colors"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></button>
+                                <button className="p-2 hover:bg-white/5 rounded-lg text-zinc-500 transition-colors"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg></button>
+                            </div>
+                        </div>
+
+                        <nav className="flex-1 overflow-y-auto no-scrollbar space-y-1 px-2">
+                            <SidebarItem label="Home" icon="home" active />
+                            <SidebarItem label="Live" icon="video" />
+                            <SidebarItem label="Explore" icon="search" />
+                            <SidebarItem label="Messages" icon="mail" badge={3} />
+                            <SidebarItem label="Notification" icon="bell" />
+                            <SidebarItem label="Vault" icon="lock" />
+                            <SidebarItem label="My Profile" icon="user" />
+                            <SidebarItem label="Settings" icon="more" />
+                        </nav>
+                        
+                        {/* User Mini Profile */}
+                        <div className="p-6 mt-auto border-t border-white/5">
+                            <div className="flex items-center gap-3 mb-6">
+                                <img src={config.profilePic} className="w-10 h-10 rounded-full object-cover border border-white/10" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold truncate text-white">{config.username}</p>
+                                    <p className="text-[10px] text-zinc-500 truncate font-medium">Verified Creator</p>
+                                </div>
+                            </div>
+                            <button className="w-full bg-[#ff6b7d] text-white py-3.5 rounded-[16px] font-bold text-sm flex items-center justify-center gap-2 shadow-lg shadow-pink-900/20 hover:scale-[1.02] active:scale-[0.98] transition-all">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M12 5v14M5 12h14"/></svg>
+                                New Post
+                            </button>
+                        </div>
+                    </aside>
+
+                    {/* MAIN */}
+                    <main className="flex-1 flex flex-col overflow-hidden bg-[#0d0d0d] relative">
+                        {/* Header */}
+                        <header className="h-24 flex items-center px-10 shrink-0 gap-8 border-b border-white/5 bg-[#0d0d0d]/80 backdrop-blur-md z-10">
+                            <div className="flex bg-[#161616] p-1.5 rounded-full border border-white/5">
+                                {['Earnings', 'General Stats'].map(t => (
+                                    <button key={t} onClick={() => setActiveTab(t)} className={`tab-pill ${activeTab === t ? 'active' : ''}`}>
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                            
+                            <div className="ml-auto flex items-center gap-4">
+                                <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Période</span>
+                                <div className="flex gap-2">
+                                     <DateButton date={startDate} label="From" />
+                                     <DateButton date={endDate} label="To" />
+                                </div>
+                                <div className="h-8 w-[1px] bg-white/10 mx-2"></div>
+                                <select 
+                                    value={period} 
+                                    onChange={(e) => setPeriod(parseInt(e.target.value))}
+                                    className="bg-[#161616] text-white text-xs font-bold px-4 py-2.5 rounded-xl border border-white/5 outline-none hover:border-[#ff6b7d] transition-colors cursor-pointer"
+                                >
+                                    <option value={7}>Last 7 Days</option>
+                                    <option value={30}>Last 30 Days</option>
+                                    <option value={90}>Last 3 Months</option>
+                                </select>
+                            </div>
+                        </header>
+
+                        <div className="flex-1 overflow-y-auto no-scrollbar p-10 pt-6 space-y-8">
+                            {/* Total Earnings Summary Big */}
+                            <div className="flex items-end justify-between px-2">
+                                <div>
+                                    <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest mb-1">Total Earnings</p>
+                                    <h2 className="text-5xl font-black text-white tracking-tight">{formatMoney(config.totalRevenue)}</h2>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[#ff6b7d] text-sm font-bold bg-[#ff6b7d]/10 px-3 py-1 rounded-lg inline-block mb-1">
+                                        +12.5% this period
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* EARNINGS GRID */}
+                            <div className="grid grid-cols-4 gap-4 animate-slide">
+                                <RevenueCard label="Subscriptions" value={formatMoney(breakdown.subs)} icon="users" />
+                                <RevenueCard label="Tips" value={formatMoney(breakdown.tips)} icon="dollar" />
+                                <RevenueCard label="Messages" value={formatMoney(breakdown.msgs)} icon="mail" />
+                                <RevenueCard label="Customs" value={formatMoney(breakdown.custom)} icon="star" />
+                                <RevenueCard label="Video Calls" value={formatMoney(breakdown.calls)} icon="video" />
+                                <RevenueCard label="VIP Access" value={formatMoney(breakdown.vip)} icon="crown" />
+                                <RevenueCard label="Streams" value="$0.00" icon="cast" />
+                                <RevenueCard label="Referrals" value="$0.00" icon="link" />
+                            </div>
+
+                            {/* SALES INSIGHTS CHART */}
+                            <div className="bg-[#161616] rounded-[32px] p-8 border border-white/5 space-y-8 animate-slide relative group/chart" style={{animationDelay: '0.1s'}}>
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-xl font-bold">Sales Insights</h3>
+                                    <div className="bg-[#0d0d0d] px-4 py-2 rounded-xl border border-white/5 text-xs font-bold text-zinc-400 flex items-center gap-2 cursor-pointer hover:text-white transition-colors">
+                                        Daily View <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="m6 9 6 6 6-6"/></svg>
+                                    </div>
+                                </div>
+
+                                <div className="h-[320px] w-full relative cursor-crosshair" onMouseMove={handleMouseMove} onMouseLeave={() => setHoveredData(null)}>
+                                    
+                                    {/* Y-Axis Grid Lines */}
+                                    <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                                        {[1, 0.75, 0.5, 0.25, 0].map((t, i) => (
+                                            <div key={i} className="w-full border-t border-white/5 relative">
+                                                {i < 4 && <span className="absolute -top-3 left-0 text-[10px] font-bold text-zinc-700">
+                                                    ${Math.round(maxValue * t)}
+                                                </span>}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                        <defs>
+                                            <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#ff6b7d" stopOpacity="0.2" />
+                                                <stop offset="100%" stopColor="#ff6b7d" stopOpacity="0" />
+                                            </linearGradient>
+                                        </defs>
+                                        <path d={areaPath} className="chart-area" fill="url(#chartGradient)" />
+                                        <path d={linePath} fill="none" stroke="#ff6b7d" strokeWidth="2" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                                        
+                                        {hoveredData && (
+                                            <g>
+                                                <line 
+                                                    x1={hoveredData.x} y1="0" 
+                                                    x2={hoveredData.x} y2="100" 
+                                                    stroke="white" strokeWidth="1" strokeDasharray="3" opacity="0.3" 
+                                                    vectorEffect="non-scaling-stroke"
+                                                />
+                                                <circle 
+                                                    cx={hoveredData.x} cy={hoveredData.y} 
+                                                    r="4" fill="#ff6b7d" stroke="#161616" strokeWidth="2" 
+                                                    vectorEffect="non-scaling-stroke"
+                                                />
+                                            </g>
+                                        )}
+                                    </svg>
+
+                                    {/* X-Axis Labels (Adaptive) */}
+                                    <div className="flex justify-between mt-4 px-2">
+                                        {chartData.filter((_, i) => i % Math.ceil(chartData.length / 6) === 0).map((d, i) => (
+                                            <span key={i} className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">{d.label}</span>
+                                        ))}
+                                    </div>
+
+                                    {/* Floating Tooltip */}
+                                    {hoveredData && (
+                                        <div 
+                                            className="chart-tooltip" 
+                                            style={{ left: `${hoveredData.x}%`, top: `${hoveredData.y}%` }}
+                                        >
+                                            <div className="text-[9px] uppercase opacity-80 mb-0.5 text-white">{hoveredData.fullDate}</div>
+                                            <div className="text-sm font-black text-white">{formatMoney(hoveredData.value)}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const SidebarItem = ({ label, icon, active, badge }) => {
+            const icons = {
+                home: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9Z"/></svg>,
+                video: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="m22 8-6 4 6 4V8Z"/><rect width="14" height="12" x="2" y="6" rx="2" ry="2"/></svg>,
+                search: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+                mail: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>,
+                bell: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>,
+                calendar: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>,
+                package: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>,
+                lock: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>,
+                user: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+                more: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            };
+            return (
+                <div className={`sidebar-item group ${active ? 'active' : ''}`}>
+                    <span className={`mr-4 ${active ? 'text-[#ff6b7d]' : 'text-zinc-600 group-hover:text-zinc-400'}`}>{icons[icon]}</span>
+                    <span className="flex-1">{label}</span>
+                    {badge && <span className="bg-[#ff6b7d] text-white text-[10px] font-bold px-1.5 rounded-md">{badge}</span>}
+                </div>
+            );
+        };
+
+        const RevenueCard = ({ label, value, icon }) => (
+            <div className="earnings-card group">
+                <div className="flex justify-between items-start mb-2">
+                    <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                       {/* Simplified Icons for Cards */}
+                       <svg width="16" height="16" fill="white" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fillOpacity="0.5"/><path d="M12 6v12M6 12h12" stroke="white" strokeWidth="3"/></svg>
+                    </div>
+                </div>
+                <p className="text-white text-2xl font-black mb-1 tabular-nums">{value}</p>
+                <p className="text-white/80 text-[10px] font-bold uppercase tracking-wider">{label}</p>
+            </div>
+        );
+
+        const DateButton = ({ date, label }) => (
+            <div className="bg-[#161616] px-4 py-2.5 rounded-xl border border-white/5 text-white flex items-center gap-2 cursor-default hover:border-white/10 transition-colors">
+                <span className="text-zinc-500 text-[10px] uppercase font-bold mr-1">{label}</span>
+                <span className="text-xs font-bold tabular-nums">{date}</span>
+                <svg className="text-zinc-600" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg>
+            </div>
+        );
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

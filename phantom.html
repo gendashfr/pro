@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phantom Extension Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; margin: 0; background-color: #0b0b0b; color: #ffffff; overflow: hidden; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .bg-phantom-dark { background-color: #222222; }
+        .bg-phantom-card { background-color: #333333; }
+        .bg-phantom-nav { background-color: #1a1a1a; }
+        .text-phantom-purple { color: #ab9ff2; }
+        .bg-phantom-purple { background-color: #ab9ff2; }
+        
+        /* Animation fluide */
+        .animate-pop { animation: popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes popIn { 
+            from { opacity: 0; transform: scale(0.98) translateY(8px); } 
+            to { opacity: 1; transform: scale(1) translateY(0); } 
+        }
+
+        .switch { position: relative; display: inline-block; width: 40px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .3s; border-radius: 24px; }
+        .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 2px; bottom: 2px; background-color: white; transition: .3s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        input:checked + .slider { background-color: #ab9ff2; }
+        input:checked + .slider:before { transform: translateX(16px); }
+
+        .jup-gradient { background: linear-gradient(180deg, rgba(20,20,20,0) 0%, rgba(171, 159, 242, 0.05) 100%); }
+        .glass-panel { background: rgba(30, 30, 30, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.08); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+
+        // Logos stables
+        const LOGOS = {
+            phantom: "https://res.cloudinary.com/dr6l7979v/image/upload/v1649176313/phantom-logo_qiyob9.png",
+            sol: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+            eth: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png",
+            usdc: "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/assets/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48/logo.png",
+            jup: "https://static.jup.ag/jup/icon.png",
+            pyth: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/HZ1JkzUNuGoB6dqSbyvgMebOCzzpgS3S665K6KMa52sA/logo.png",
+            bonk: "https://h6z7slit2m3z7uz663x3vclwz5l4j26lqszj7gftqym6wzvw7r7a.arweave.net/60f78A5p47z9U_R9k-9y6LvR8z-t3l-HqK4D7E2z7Wk?ext=png",
+            ray: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R/logo.png"
+        };
+
+        const TOKENS_CATALOG = [
+            { id: 'sol', name: 'Solana', symbol: 'SOL', price: 145.20, weight: 50, icon: LOGOS.sol },
+            { id: 'usdc', name: 'USDC', symbol: 'USDC', price: 1.00, weight: 30, icon: LOGOS.usdc },
+            { id: 'eth', name: 'Ethereum', symbol: 'ETH', price: 2450.12, weight: 20, icon: LOGOS.eth },
+            { id: 'jup', name: 'Jupiter', symbol: 'JUP', price: 0.98, weight: 15, icon: LOGOS.jup },
+            { id: 'pyth', name: 'Pyth Network', symbol: 'PYTH', price: 0.45, weight: 10, icon: LOGOS.pyth },
+            { id: 'ray', name: 'Raydium', symbol: 'RAY', price: 1.85, weight: 10, icon: LOGOS.ray },
+            { id: 'bonk', name: 'Bonk', symbol: 'BONK', price: 0.000025, weight: 5, icon: LOGOS.bonk },
+        ];
+
+        const formatUSD = (val) => {
+            if (isNaN(val)) return "$0.00";
+            return new Intl.NumberFormat('en-US', { 
+                style: 'currency', 
+                currency: 'USD',
+                maximumFractionDigits: 2 
+            }).format(val);
+        };
+
+        const App = () => {
+            const [step, setStep] = useState('config'); 
+            const [isExtensionOpen, setIsExtensionOpen] = useState(true);
+            const [walletData, setWalletData] = useState({
+                accountName: 'Wallet 1',
+                totalBalance: 12500,
+                selectedTokenIds: ['sol', 'usdc', 'jup']
+            });
+
+            const calculatedTokens = useMemo(() => {
+                const selectedTokens = TOKENS_CATALOG.filter(t => walletData.selectedTokenIds.includes(t.id));
+                if (selectedTokens.length === 0) return [];
+
+                const totalWeight = selectedTokens.reduce((acc, t) => acc + t.weight, 0);
+                if (totalWeight === 0) return []; // Sécurité division par zéro
+                
+                return selectedTokens.map((token) => {
+                    const share = token.weight / totalWeight;
+                    const randomFactor = 0.95 + Math.random() * 0.1;
+                    let allocatedUSD = walletData.totalBalance * share * randomFactor;
+                    const amount = (allocatedUSD / token.price).toFixed(token.price < 1 ? 0 : 4);
+                    return { ...token, amount, usdValue: allocatedUSD };
+                }).sort((a, b) => b.usdValue - a.usdValue);
+            }, [walletData]);
+
+            const currentBalance = useMemo(() => {
+                 return calculatedTokens.reduce((acc, t) => acc + (t.amount * t.price), 0);
+            }, [calculatedTokens]);
+
+            if (step === 'config') return <ConfigStep onGenerate={(data) => { setWalletData(data); setStep('dashboard'); }} defaultData={walletData} />;
+            
+            return (
+                <div className="w-full h-screen flex flex-col bg-[#131313] text-white">
+                    {/* NAV BAR */}
+                    <div className="flex items-center px-4 py-2 gap-3 z-50 shrink-0 bg-[#1e1e1e] border-b border-black">
+                        <div className="flex gap-2 w-16">
+                            <div className="w-3 h-3 rounded-full bg-[#ff5f56]"></div>
+                            <div className="w-3 h-3 rounded-full bg-[#ffbd2e]"></div>
+                            <div className="w-3 h-3 rounded-full bg-[#27c93f]"></div>
+                        </div>
+                        <div className="flex-1 flex justify-center mx-4">
+                            <div className="w-full max-w-2xl bg-[#2b2b2b] text-[#e0e0e0] rounded-full px-4 py-1 text-sm flex items-center justify-center gap-2 border border-[#3c3b44]">
+                                <span className="opacity-80">jup.ag</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 w-fit justify-end">
+                            <button 
+                                onClick={() => setIsExtensionOpen(!isExtensionOpen)} 
+                                className={`p-1.5 rounded transition-all ${isExtensionOpen ? 'bg-[#353535]' : 'hover:bg-[#2a2a2a]'}`}
+                            >
+                                <img src={LOGOS.phantom} className="w-5 h-5 object-contain" alt="Phantom" />
+                            </button>
+                            <button onClick={() => setStep('config')} className="ml-2 px-3 py-1 text-[10px] font-bold bg-[#ab9ff2] text-black rounded hover:opacity-90">
+                                EDIT
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* JUPITER BACKGROUND */}
+                    <div className="flex-1 relative flex flex-col jup-gradient overflow-hidden items-center pt-8">
+                         <div className="w-[480px] glass-panel rounded-3xl p-6 shadow-2xl border-none">
+                            <div className="flex justify-between items-center mb-6">
+                                <div className="text-[#c7f284] font-bold text-lg">Jupiter Swap</div>
+                                <div className="text-xs text-zinc-400">Connecté: {walletData.accountName}</div>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="bg-[#131313] p-4 rounded-xl border border-transparent">
+                                    <div className="flex justify-between text-xs text-zinc-500 mb-2"><span>You Pay</span></div>
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-2 bg-[#2a2a2a] px-3 py-1.5 rounded-full">
+                                            <img src={LOGOS.sol} className="w-5 h-5" /> <span className="font-bold">SOL</span>
+                                        </div>
+                                        <span className="text-xl font-bold text-zinc-500">0.00</span>
+                                    </div>
+                                </div>
+                                <div className="bg-[#131313] p-4 rounded-xl border border-transparent">
+                                    <div className="flex justify-between text-xs text-zinc-500 mb-2"><span>Receive</span></div>
+                                    <div className="flex justify-between items-center">
+                                        <div className="flex items-center gap-2 bg-[#2a2a2a] px-3 py-1.5 rounded-full">
+                                            <img src={LOGOS.usdc} className="w-5 h-5" /> <span className="font-bold">USDC</span>
+                                        </div>
+                                        <span className="text-xl font-bold text-zinc-500">0.00</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* EXTENSION OVERLAY */}
+                        {isExtensionOpen && (
+                            <div className="absolute top-4 right-4 w-[360px] h-[600px] bg-phantom-dark rounded-xl shadow-2xl border border-[#333] flex flex-col animate-pop overflow-hidden font-sans select-none z-50">
+                                <PhantomExtensionInterface data={{...walletData, totalBalance: currentBalance}} tokens={calculatedTokens} />
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const ConfigStep = ({ onGenerate, defaultData }) => {
+            const [localData, setLocalData] = useState(defaultData);
+
+            const toggleToken = (id) => {
+                const current = [...localData.selectedTokenIds];
+                setLocalData({
+                    ...localData, 
+                    selectedTokenIds: current.includes(id) ? current.filter(t => t !== id) : [...current, id]
+                });
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 bg-[#090909]">
+                    <div className="w-full max-w-lg bg-[#141414] p-8 rounded-3xl border border-white/5 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#ab9ff2] to-transparent opacity-50"></div>
+                        <div className="flex flex-col items-center gap-3 mb-8">
+                            <img src={LOGOS.phantom} className="w-12 h-12 object-contain" />
+                            <h1 className="text-2xl font-bold text-white">Configuration</h1>
+                        </div>
+                        <div className="space-y-6">
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-bold uppercase text-zinc-500 ml-1">Montant Total ($)</label>
+                                <input type="number" className="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-3 text-white outline-none focus:border-[#ab9ff2]" value={localData.totalBalance} onChange={e => setLocalData({...localData, totalBalance: parseFloat(e.target.value) || 0})} />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[11px] font-bold uppercase text-zinc-500 ml-1">Tokens</label>
+                                <div className="bg-[#1a1a1a] rounded-2xl border border-[#333] max-h-[280px] overflow-y-auto p-2">
+                                    {TOKENS_CATALOG.map(token => (
+                                        <div key={token.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5">
+                                            <div className="flex items-center gap-3">
+                                                <img src={token.icon} className="w-8 h-8 rounded-full bg-[#222]" />
+                                                <span className="font-bold text-sm">{token.name}</span>
+                                            </div>
+                                            <label className="switch">
+                                                <input type="checkbox" checked={localData.selectedTokenIds.includes(token.id)} onChange={() => toggleToken(token.id)} />
+                                                <span className="slider"></span>
+                                            </label>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <button onClick={() => onGenerate(localData)} className="w-full bg-[#ab9ff2] text-black py-4 rounded-xl font-bold mt-4 hover:opacity-90">GÉNÉRER</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const PhantomExtensionInterface = ({ data, tokens }) => {
+            const [activeTab, setActiveTab] = useState('wallet');
+            
+            return (
+                <>
+                    <header className="px-4 py-3 flex items-center justify-between bg-[#222] border-b border-white/5">
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 bg-[#ab9ff2] rounded-full flex items-center justify-center text-[10px] font-black text-black">
+                                {data.accountName.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-[13px] font-bold">{data.accountName}</span>
+                        </div>
+                        <div className="flex gap-3 text-zinc-400">
+                             <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                        </div>
+                    </header>
+
+                    <div className="flex-1 overflow-y-auto bg-[#222]">
+                        {activeTab === 'wallet' ? (
+                            <div className="animate-pop pb-4">
+                                <div className="text-center py-8">
+                                    <h2 className="text-[38px] font-bold text-white leading-none">{formatUSD(data.totalBalance)}</h2>
+                                    <div className="text-[#27c93f] text-xs font-bold mt-2">+$124.50 (3.24%)</div>
+                                </div>
+
+                                <div className="flex justify-center gap-6 mb-8">
+                                    <ActionButton icon="receive" label="Déposer" />
+                                    <ActionButton icon="send" label="Envoyer" />
+                                    <ActionButton icon="swap" label="Swap" />
+                                </div>
+
+                                <div className="px-2">
+                                    {tokens.map(token => (
+                                        <div key={token.id} className="flex items-center gap-3 p-3 hover:bg-white/5 rounded-xl cursor-pointer">
+                                            <img src={token.icon} className="w-10 h-10 rounded-full bg-[#1a1a1a]" />
+                                            <div className="flex-1">
+                                                <div className="flex justify-between font-bold text-sm">
+                                                    <span>{token.name}</span>
+                                                    <span>{formatUSD(token.usdValue)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-xs text-zinc-500 mt-1">
+                                                    <span>{token.amount} {token.symbol}</span>
+                                                    <span className="text-[#27c93f]">+1.2%</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center p-8 text-center opacity-50">
+                                <p className="text-sm">Section en maintenance</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <nav className="h-[60px] bg-[#1a1a1a] border-t border-[#2a2a2a] flex items-center justify-around px-2">
+                        <NavItem active={activeTab === 'wallet'} onClick={() => setActiveTab('wallet')} icon="home" />
+                        <NavItem active={activeTab === 'apps'} onClick={() => setActiveTab('apps')} icon="grid" />
+                        <NavItem active={activeTab === 'swap'} onClick={() => setActiveTab('swap')} icon="swap" />
+                        <NavItem active={activeTab === 'activity'} onClick={() => setActiveTab('activity')} icon="clock" />
+                    </nav>
+                </>
+            );
+        };
+
+        const NavItem = ({ active, onClick, icon }) => {
+            const color = active ? "#ab9ff2" : "#888";
+            // Icônes SVG simplifiées pour éviter les erreurs de rendu
+            const icons = {
+                home: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9z" /></svg>,
+                grid: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /></svg>,
+                swap: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><path d="M7 10l5-5 5 5" /><path d="M17 14l-5 5-5-5" /></svg>,
+                clock: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+            };
+            return <button onClick={onClick} className="p-2">{icons[icon]}</button>;
+        };
+
+        const ActionButton = ({ icon, label }) => {
+            const icons = {
+                receive: <path d="M12 5v14M19 12l-7 7-7-7"/>,
+                send: <path d="M12 19V5M5 12l7-7 7 7"/>,
+                swap: <path d="M16 3l4 4-4 4M20 7H4M8 21l-4-4 4-4M4 17h16"/>
+            };
+            return (
+                <div className="flex flex-col items-center gap-2 cursor-pointer group">
+                    <div className="w-12 h-12 rounded-full bg-[#ab9ff2] flex items-center justify-center text-[#1a1a1a] group-hover:brightness-110 transition-all">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            {icons[icon]}
+                        </svg>
+                    </div>
+                    <span className="text-xs text-zinc-400 group-hover:text-white">{label}</span>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

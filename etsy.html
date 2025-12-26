@@ -1,0 +1,357 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Etsy Shop Manager - GenDash</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Graphik:wght@300;400;500;600&family=Guardian+Egyptian:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --etsy-orange: #f1641e;
+            --etsy-bg: #faf9f5;
+            --etsy-text: #222222;
+            --etsy-border: #e1e3df;
+        }
+        body { 
+            font-family: 'Graphik', 'Helvetica Neue', sans-serif; 
+            margin: 0; 
+            background-color: var(--etsy-bg); 
+            color: var(--etsy-text);
+            overflow: hidden;
+        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        .etsy-card {
+            background: white;
+            border: 1px solid var(--etsy-border);
+            border-radius: 6px;
+            padding: 24px;
+        }
+
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 16px;
+            color: #595959;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+        .sidebar-item:hover { background-color: #f0f0f0; color: #222; }
+        .sidebar-item.active { background-color: #f0f0f0; color: #222; font-weight: 500; border-left: 4px solid var(--etsy-orange); }
+
+        .chart-path {
+            fill: rgba(241, 100, 30, 0.2);
+            stroke: var(--etsy-orange);
+            stroke-width: 2;
+        }
+
+        .activity-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fade { animation: fadeIn 0.3s ease-in-out; }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        const App = () => {
+            const [step, setStep] = useState('config'); 
+            const [config, setConfig] = useState({
+                shopName: 'Hanna Lisa',
+                revenue: 450.50,
+                views: 1250
+            });
+
+            if (step === 'config') return <ConfigStep onGenerate={(d) => { setConfig(d); setStep('dashboard'); }} defaultData={config} />;
+            return <EtsyDashboard config={config} onBack={() => setStep('config')} />;
+        };
+
+        const ConfigStep = ({ onGenerate, defaultData }) => {
+            const [local, setLocal] = useState(defaultData);
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 bg-[#faf9f5]">
+                    <div className="w-full max-w-md space-y-8 p-10 bg-white border border-[#e1e3df] rounded-xl shadow-sm">
+                        <div className="text-center space-y-2">
+                            <h1 className="text-3xl font-bold text-[#f1641e]">Etsy Shop Manager</h1>
+                            <p className="text-gray-500 text-sm">Configurez votre boutique</p>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-700 uppercase block mb-1">Nom du vendeur</label>
+                                <input className="w-full border border-gray-300 rounded-md p-3 outline-none focus:border-[#f1641e]" value={local.shopName} onChange={e => setLocal({...local, shopName: e.target.value})} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-700 uppercase block mb-1">Revenu du mois (€)</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    className="w-full border border-gray-300 rounded-md p-3 outline-none focus:border-[#f1641e]" 
+                                    value={local.revenue} 
+                                    onChange={e => setLocal({...local, revenue: parseFloat(e.target.value) || 0})} 
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs font-bold text-gray-700 uppercase block mb-1">Vues totales</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full border border-gray-300 rounded-md p-3 outline-none focus:border-[#f1641e]" 
+                                    value={local.views} 
+                                    onChange={e => setLocal({...local, views: parseInt(e.target.value) || 0})} 
+                                />
+                            </div>
+                            <button onClick={() => onGenerate(local)} className="w-full bg-[#f1641e] text-white py-4 rounded-full font-bold hover:brightness-110 transition-all">Générer le Dashboard</button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const EtsyDashboard = ({ config, onBack }) => {
+            const [hoveredIdx, setHoveredIdx] = useState(null);
+
+            const chartData = useMemo(() => {
+                return Array.from({ length: 20 }, (_, i) => ({
+                    day: i + 1,
+                    val: Math.floor(Math.random() * 50) + 10
+                }));
+            }, []);
+
+            const viewsCount = Number(config.views) || 0;
+            const revenueValue = Number(config.revenue) || 0;
+
+            return (
+                <div className="flex h-screen w-full bg-[#faf9f5] overflow-hidden animate-fade">
+                    {/* SIDEBAR */}
+                    <aside className="w-[240px] bg-white border-r border-[#e1e3df] flex flex-col shrink-0">
+                        <div className="p-6 pb-2">
+                            <div className="flex items-center gap-2 cursor-pointer" onClick={onBack}>
+                                <div className="w-6 h-6 bg-[#f1641e] rounded-sm flex items-center justify-center text-white font-bold text-xs italic">E</div>
+                                <span className="font-bold text-sm">Shop Manager</span>
+                            </div>
+                        </div>
+
+                        <div className="px-4 py-4">
+                            <div className="relative group">
+                                <input type="text" placeholder="Search" className="w-full bg-[#f4f4f4] border-transparent rounded-full py-1.5 pl-10 pr-4 text-sm outline-none focus:bg-white focus:border-[#e1e3df]" />
+                                <svg className="absolute left-3 top-2 text-gray-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                            </div>
+                        </div>
+
+                        <nav className="flex-1 overflow-y-auto no-scrollbar pt-2">
+                            <SidebarItem label="Dashboard" active icon="layout" />
+                            <SidebarItem label="Listings" icon="tag" />
+                            <SidebarItem label="Conversations" icon="message-square" />
+                            <SidebarItem label="Orders & Shipping" icon="truck" />
+                            <SidebarItem label="Stats" icon="bar-chart" />
+                            <SidebarItem label="Finances" icon="credit-card" />
+                            <SidebarItem label="Marketing" icon="target" />
+                            <SidebarItem label="Community & Help" icon="help-circle" />
+                            <SidebarItem label="Settings" icon="settings" />
+                            
+                            <div className="mt-6 px-4">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Sales Channels</p>
+                                <div className="flex items-center gap-3 p-2 hover:bg-[#f0f0f0] rounded cursor-pointer">
+                                    <div className="w-5 h-5 bg-[#f1641e] rounded flex items-center justify-center text-[10px] text-white italic">E</div>
+                                    <span className="text-sm">Etsy</span>
+                                </div>
+                            </div>
+                        </nav>
+
+                        <div className="p-4 border-t border-[#e1e3df]">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-xs">{(config.shopName || 'H')[0]}</div>
+                                <div className="text-[11px]">
+                                    <p className="font-bold">{config.shopName || 'Hanna Lisa'}</p>
+                                    <p className="text-gray-500">View shop</p>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* MAIN */}
+                    <main className="flex-1 flex flex-col overflow-hidden">
+                        <header className="h-14 flex items-center justify-between px-8 bg-[#faf9f5] shrink-0">
+                            <h2 className="text-2xl font-medium">Good afternoon, {config.shopName}</h2>
+                            <div className="flex items-center gap-4 text-sm font-medium">
+                                <span className="text-gray-500">Available for deposit</span>
+                                <span className="font-bold">€0.00</span>
+                            </div>
+                        </header>
+
+                        <div className="flex-1 overflow-y-auto no-scrollbar p-8 pt-2 grid grid-cols-12 gap-6">
+                            {/* LEFT COLUMN */}
+                            <div className="col-span-9 space-y-6">
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div className="etsy-card">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-lg">Orders</h3>
+                                            <button className="text-sm text-blue-600 hover:underline">View all orders</button>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">New</span>
+                                                <span className="font-bold">0</span>
+                                            </div>
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">In progress</span>
+                                                <span className="font-bold">0</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="etsy-card">
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-lg">Listings</h3>
+                                            <button className="text-sm text-blue-600 hover:underline">View all listings</button>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">Active listings</span>
+                                                <span className="font-bold">0</span>
+                                            </div>
+                                            <div className="flex justify-between text-sm">
+                                                <span className="text-gray-600">Sold out</span>
+                                                <span className="font-bold">61</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* STATS OVERVIEW */}
+                                <div className="etsy-card">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div className="flex items-center gap-2">
+                                            <h3 className="font-bold text-lg">Stats overview for</h3>
+                                            <select className="bg-transparent border-b border-gray-300 text-sm font-bold outline-none"><option>All channels</option></select>
+                                            <span className="text-sm">for</span>
+                                            <select className="bg-transparent border-b border-gray-300 text-sm font-bold outline-none"><option>This month</option></select>
+                                        </div>
+                                        <button className="text-sm text-blue-600 hover:underline">View detailed stats</button>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-x-12 gap-y-10">
+                                        <StatTile label="Total Views" value={viewsCount} data={chartData} color="rgba(241, 100, 30, 0.15)" />
+                                        <StatTile label="Visits" value={Math.floor(viewsCount * 0.4)} data={chartData.map(d => ({...d, val: d.val * 0.5}))} color="rgba(241, 100, 30, 0.15)" />
+                                        <StatTile label="Orders" value="0" data={Array(20).fill(0).map((_,i) => ({day:i, val:0}))} color="rgba(200, 200, 200, 0.1)" />
+                                        <StatTile label="Revenue" value={`€${revenueValue.toFixed(2)}`} data={chartData.map(d => ({...d, val: d.val * 2}))} color="rgba(241, 100, 30, 0.15)" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* RIGHT COLUMN - ACTIVITY */}
+                            <div className="col-span-3">
+                                <div className="etsy-card h-full flex flex-col">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="font-bold text-lg">Recent activity</h3>
+                                        <select className="text-xs bg-transparent border border-gray-300 rounded px-1"><option>All</option></select>
+                                    </div>
+                                    <div className="flex-1 space-y-2 overflow-y-auto no-scrollbar">
+                                        <ActivityItem user="Sharon Lewis" action="favorited your shop" date="Jun 7" />
+                                        <ActivityItem user="Olivia Llewellyn" action="favorited your shop" date="May 30" />
+                                        <ActivityItem user="Handmade Crusade" action="favorited your shop" date="May 5" />
+                                        <ActivityItem user="Landsburg" action="favorited your shop" date="Apr 29" />
+                                        <ActivityItem user="Abogher33" action="favorited your shop" date="Apr 22" />
+                                    </div>
+                                    <button className="w-full mt-6 py-2 border border-gray-300 rounded text-sm font-bold hover:bg-gray-50">See more</button>
+                                </div>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const SidebarItem = ({ label, active, icon }) => (
+            <div className={`sidebar-item ${active ? 'active' : ''}`}>
+                <div className="w-5 h-5 mr-3 flex items-center justify-center">
+                    <div className="w-3 h-3 border-2 border-current rounded-sm"></div>
+                </div>
+                {label}
+            </div>
+        );
+
+        const StatTile = ({ label, value, data, color }) => {
+            const maxVal = Math.max(...data.map(d => d.val), 1);
+            const getX = (i) => (i / (data.length - 1)) * 100;
+            const getY = (v) => 100 - (v / maxVal * 80);
+
+            const areaPath = useMemo(() => {
+                let p = `M 0 100`;
+                for (let i = 0; i < data.length; i++) {
+                    p += ` L ${getX(i)} ${getY(data[i].val)}`;
+                }
+                p += ` L 100 100 Z`;
+                return p;
+            }, [data, maxVal]);
+
+            const linePath = useMemo(() => {
+                let p = `M 0 ${getY(data[0].val)}`;
+                for (let i = 1; i < data.length; i++) {
+                    p += ` L ${getX(i)} ${getY(data[i].val)}`;
+                }
+                return p;
+            }, [data, maxVal]);
+
+            return (
+                <div className="space-y-2">
+                    <div className="flex justify-between items-end">
+                        <div className="space-y-1">
+                            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{label}</p>
+                            <p className="text-2xl font-medium">{value}</p>
+                        </div>
+                        <span className="text-[10px] text-gray-400 font-bold mb-1 italic">3 hours ago</span>
+                    </div>
+                    <div className="h-16 w-full relative">
+                        <svg className="w-full h-full overflow-visible" viewBox="0 0 100 100" preserveAspectRatio="none">
+                            <path d={areaPath} fill={color} />
+                            <path d={linePath} fill="none" stroke="#f1641e" strokeWidth="2" strokeLinejoin="round" />
+                        </svg>
+                        <div className="absolute bottom-0 left-0 right-0 flex justify-between text-[9px] text-gray-400 font-bold pt-1 border-t border-gray-100 mt-1">
+                            <span>Apr 1</span>
+                            <span>Jun 15</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const ActivityItem = ({ user, action, date }) => (
+            <div className="activity-item">
+                <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center shrink-0">
+                    <svg className="text-gray-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                </div>
+                <div>
+                    <p className="text-xs">
+                        <span className="font-bold text-blue-600 hover:underline cursor-pointer">{user}</span> {action}
+                    </p>
+                    <div className="flex items-center gap-1 mt-1">
+                        <svg className="text-red-500 fill-current" width="8" height="8" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                        <span className="text-[10px] font-bold text-gray-400">{date}</span>
+                    </div>
+                </div>
+            </div>
+        );
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
