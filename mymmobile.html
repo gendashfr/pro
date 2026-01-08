@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>MYM Dashboard</title>
+
+    <!-- ICON CONFIGURATION START -->
+    <!-- Icon for iOS (Add to Home Screen) -->
+    <link rel="apple-touch-icon" href="mym.png" />
+    <!-- Icon for Browsers / Android -->
+    <link rel="icon" type="image/png" href="mym.png" />
+    <!-- Enable standalone mode (removes browser bars when launched from home screen) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="MYM Dashboard">
+    <!-- ICON CONFIGURATION END -->
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-sidebar: #000000;
+            --bg-main: #0a0a0a;
+            --primary: #5271ff;
+            --green-valid: #4ade80;
+            --yellow-pending: #facc15;
+        }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            margin: 0; 
+            background-color: var(--bg-main); 
+            color: #ffffff; 
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .h-dvh { height: 100dvh; }
+        .min-h-dvh { min-height: 100dvh; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .bg-mym-sidebar { background-color: var(--bg-sidebar); }
+        .bg-mym-main { background-color: var(--bg-main); }
+        
+        /* Sidebar (Desktop) */
+        .sidebar-item {
+            display: flex;
+            align-items: center;
+            padding: 14px 24px;
+            color: #9ca3af;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+        }
+        .sidebar-item:hover { color: #fff; background-color: rgba(255,255,255,0.05); }
+        .sidebar-item.active { border-left: 3px solid var(--primary); color: #fff; background: linear-gradient(90deg, rgba(82, 113, 255, 0.1) 0%, transparent 100%); }
+
+        /* Bottom Nav (Mobile) */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 80px;
+            background-color: #000;
+            border-top: 1px solid #1f1f1f;
+            display: flex;
+            justify-content: space-around;
+            align-items: flex-start;
+            padding-top: 15px;
+            z-index: 50;
+            padding-bottom: 20px;
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            color: #6b7280;
+            font-size: 10px;
+            font-weight: 600;
+            width: 60px;
+        }
+        .nav-item.active { color: #fff; }
+        .nav-item svg { width: 24px; height: 24px; }
+
+        /* Filters */
+        .filter-btn {
+            background-color: #1f1f1f;
+            color: #9ca3af;
+            padding: 8px 18px;
+            border-radius: 99px;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .filter-btn.active {
+            background-color: #3b5bdb;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(59, 91, 219, 0.3);
+        }
+
+        /* Chart */
+        .chart-container {
+            position: relative;
+            height: 380px;
+            width: 100%;
+        }
+
+        /* Animations */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade { animation: fadeIn 0.5s ease-out forwards; }
+        
+        /* SLOW ANIMATION - 4s duration */
+        @keyframes drawPath {
+            from { stroke-dashoffset: 4000; }
+            to { stroke-dashoffset: 0; }
+        }
+        .chart-line {
+            stroke-dasharray: 4000;
+            stroke-dashoffset: 4000;
+            animation: drawPath 4s ease-out forwards;
+        }
+
+        /* Number transition */
+        .number-transition {
+            transition: color 0.3s ease;
+        }
+
+        /* FAB */
+        .fab {
+            position: fixed;
+            bottom: 95px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background-color: #5d7aff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 15px rgba(93, 122, 255, 0.4);
+            z-index: 60;
+            color: white;
+        }
+
+        /* Inputs */
+        .file-upload-label {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed #27272a;
+            border-radius: 1rem;
+            cursor: pointer;
+            padding: 1.5rem;
+            transition: all 0.2s;
+        }
+        .file-upload-label:hover { border-color: #3f3f46; background: #09090b; }
+        
+        /* Mode Select Buttons */
+        .mode-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 12px;
+            border-radius: 12px;
+            border: 1px solid #27272a;
+            background: #18181b;
+            color: #a1a1aa;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .mode-btn:hover { background: #27272a; }
+        .mode-btn.selected {
+            background: rgba(82, 113, 255, 0.15);
+            border-color: var(--primary);
+            color: white;
+            box-shadow: 0 0 15px rgba(82, 113, 255, 0.1);
+        }
+
+        /* Typography */
+        .text-amount-green { color: var(--green-valid); }
+        .text-amount-yellow { color: var(--yellow-pending); }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="antialiased">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // --- UTILS ---
+        const cyrb128 = (str) => {
+            let h1 = 1779033703, h2 = 3144134277, h3 = 1013904242, h4 = 2773480762;
+            for (let i = 0, k; i < str.length; i++) {
+                k = str.charCodeAt(i);
+                h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+                h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+                h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+                h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+            }
+            return [(h1^h2^h3^h4)>>>0, (h2^h1)>>>0, (h3^h1)>>>0, (h4^h1)>>>0];
+        }
+
+        const sfc32 = (a, b, c, d) => {
+            return () => {
+                a >>>= 0; b >>>= 0; c >>>= 0; d >>>= 0; 
+                let t = (a + b) | 0;
+                a = b ^ b >>> 9;
+                b = c + (c << 3) | 0;
+                c = (c << 21 | c >>> 11);
+                d = d + 1 | 0;
+                t = t + d | 0;
+                c = c + t | 0;
+                return (t >>> 0) / 4294967296;
+            }
+        }
+
+        const formatMoney = (val, round = false) => {
+            let v = val;
+            if (round) {
+                // Round logic: close to 50 or 100 based on magnitude
+                if (v > 1000) v = Math.round(v / 50) * 50;
+                else if (v > 100) v = Math.round(v / 10) * 10;
+                else v = Math.round(v);
+                
+                return v.toLocaleString('fr-FR') + ' €'; // No decimals for round
+            }
+            return v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+        };
+
+        // --- COMPONENTS ---
+
+        const ConfigStep = ({ onGenerate, defaultData }) => {
+            const [local, setLocal] = useState(defaultData);
+            const [preview, setPreview] = useState(defaultData.profilePic);
+
+            const handleImageChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setPreview(reader.result);
+                        setLocal(prev => ({ ...prev, profilePic: reader.result }));
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="min-h-dvh flex items-center justify-center p-4 bg-black">
+                    <div className="w-full max-w-lg space-y-6 p-6 md:p-10 border border-zinc-900 rounded-[32px] bg-zinc-950 shadow-2xl animate-fade">
+                        <div className="flex flex-col items-center gap-2 text-center mb-6">
+                            <h1 className="text-4xl font-black italic tracking-tighter text-blue-500">mym</h1>
+                            <p className="text-zinc-500 text-[10px] md:text-sm font-medium tracking-wide">CONFIGURATION</p>
+                        </div>
+                        
+                        <div className="space-y-5">
+                            <div>
+                                <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] block mb-2 ml-1">Revenu Annuel Total (€)</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-white outline-none focus:border-blue-500 transition-all text-lg font-bold" 
+                                    value={local.totalAnnual} 
+                                    onChange={e => setLocal({...local, totalAnnual: parseFloat(e.target.value) || 0})} 
+                                />
+                            </div>
+
+                            <div className="p-5 bg-zinc-900/30 rounded-2xl border border-zinc-800 space-y-4">
+                                <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider block mb-3">Module Transferts</span>
+                                <div className="grid grid-cols-3 gap-3">
+                                    <button 
+                                        className={`mode-btn ${local.transferMode === 'none' ? 'selected' : ''}`}
+                                        onClick={() => setLocal({...local, transferMode: 'none'})}
+                                    >
+                                        <svg className="w-5 h-5 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                        AUCUN
+                                    </button>
+                                    <button 
+                                        className={`mode-btn ${local.transferMode === 'standard' ? 'selected' : ''}`}
+                                        onClick={() => setLocal({...local, transferMode: 'standard'})}
+                                    >
+                                        <svg className="w-5 h-5 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12h20M2 12l4-4m-4 4l4 4M22 12l-4-4m4 4l-4 4"/></svg>
+                                        STANDARD
+                                    </button>
+                                    <button 
+                                        className={`mode-btn ${local.transferMode === 'round' ? 'selected' : ''}`}
+                                        onClick={() => setLocal({...local, transferMode: 'round'})}
+                                    >
+                                        <svg className="w-5 h-5 mb-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/></svg>
+                                        PILES
+                                    </button>
+                                </div>
+
+                                {local.transferMode !== 'none' && (
+                                    <>
+                                        <div className="pt-2 animate-fade">
+                                            <label className="text-[9px] font-bold text-zinc-500 uppercase block mb-1">Part en attente ({local.pendingPercent}%)</label>
+                                            <input 
+                                                type="range" 
+                                                min="5" max="40" 
+                                                className="custom-range mt-2 w-full"
+                                                value={local.pendingPercent}
+                                                onChange={e => setLocal({...local, pendingPercent: parseInt(e.target.value)})}
+                                            />
+                                        </div>
+                                        <div className="pt-2 animate-fade">
+                                            <label className="text-[9px] font-bold text-zinc-500 uppercase block mb-2">Nombre de transferts affichés</label>
+                                            <div className="flex gap-2">
+                                                {[10, 50, 100].map(n => (
+                                                    <button 
+                                                        key={n} 
+                                                        onClick={() => setLocal({...local, transferCount: n})} 
+                                                        className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all ${local.transferCount === n ? 'bg-blue-600/20 border-blue-600 text-blue-500' : 'bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                                                    >
+                                                        {n}
+                                                    </button>
+                                                ))}
+                                                <input 
+                                                    type="number" 
+                                                    placeholder="Custom"
+                                                    className="w-20 bg-zinc-900 border border-zinc-800 rounded-xl px-2 text-center text-xs font-bold text-white focus:border-blue-500 outline-none"
+                                                    value={local.transferCount}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value);
+                                                        setLocal({...local, transferCount: isNaN(val) ? 0 : val});
+                                                    }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] block mb-2 ml-1">Username</label>
+                                    <input type="text" className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl p-3 text-white outline-none" value={local.username} onChange={e => setLocal({...local, username: e.target.value})} />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-[0.2em] block mb-2 ml-1">Photo</label>
+                                    <label className="file-upload-label p-2 border-zinc-800">
+                                        <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                                        <img src={preview} className="w-10 h-10 rounded-full object-cover" />
+                                    </label>
+                                </div>
+                            </div>
+
+                            <button onClick={() => onGenerate(local)} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/20 text-md uppercase tracking-wider">
+                                ACCÉDER AU DASHBOARD
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const MymDashboard = ({ config, onBack }) => {
+            const [filter, setFilter] = useState('TOUT');
+            const [hoveredIdx, setHoveredIdx] = useState(null);
+
+            const seedValues = useMemo(() => {
+                return cyrb128(config.username + config.totalAnnual.toString());
+            }, [config.username, config.totalAnnual]);
+
+            // 1. STATS DU WALLET
+            const walletStats = useMemo(() => {
+                const rng = sfc32(...seedValues); 
+                
+                const lifetime = config.totalAnnual * (1.25 + rng() * 0.25); 
+                const pendingRate = config.transferMode !== 'none' ? (config.pendingPercent / 100) : 0.15;
+                const pending = config.totalAnnual * pendingRate; 
+                const valid = (config.totalAnnual / 52) * (0.8 + rng() * 0.4);
+
+                return { lifetime, pending, valid, nextDate: "2 Septembre", days: 17 };
+            }, [config, seedValues]);
+
+            // 2. DONNÉES HEADER & CHART
+            const { currentTotal, currentLabel, graphData } = useMemo(() => {
+                const rng = sfc32(seedValues[0] + filter.length, seedValues[1], seedValues[2], seedValues[3]);
+                
+                let targetSum = 0;
+                let label = "";
+                let points = 10;
+
+                if (filter === '1S') {
+                    targetSum = config.totalAnnual / 52; 
+                    label = "Revenus sur les 7 derniers jours";
+                    points = 7;
+                } else if (filter === '1M') {
+                    targetSum = config.totalAnnual / 12; 
+                    label = "Revenus sur les 30 derniers jours";
+                    points = 15; 
+                } else if (filter === '1A') {
+                    targetSum = config.totalAnnual; 
+                    label = "Revenus sur les 12 derniers mois";
+                    points = 12;
+                } else { 
+                    targetSum = walletStats.lifetime; 
+                    label = "Depuis la création du compte";
+                    points = 24;
+                }
+
+                let weights = [];
+                let totalWeight = 0;
+                for (let i = 0; i < points; i++) {
+                    let w = rng(); 
+                    w = w * w; 
+                    if (rng() > 0.65) w += 0.8; 
+                    w = Math.max(0.1, w);
+                    weights.push(w);
+                    totalWeight += w;
+                }
+
+                // Helper pour générer des étiquettes de date cohérentes avec le filtre
+                const getPointLabel = (index, totalPoints) => {
+                    const today = new Date();
+                    if (filter === '1S') {
+                        const d = new Date();
+                        d.setDate(today.getDate() - (totalPoints - 1 - index));
+                        return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric' });
+                    }
+                    if (filter === '1M') {
+                        const d = new Date();
+                        d.setDate(today.getDate() - Math.floor((totalPoints - 1 - index) * 2));
+                        return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+                    }
+                    if (filter === '1A') {
+                        const d = new Date();
+                        d.setMonth(today.getMonth() - (totalPoints - 1 - index));
+                        return d.toLocaleDateString('fr-FR', { month: 'long' });
+                    }
+                    // TOUT
+                    const d = new Date();
+                    d.setMonth(today.getMonth() - (totalPoints - 1 - index));
+                    return d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
+                };
+
+                const data = weights.map((w, i) => ({
+                    value: (w / totalWeight) * targetSum,
+                    label: getPointLabel(i, points)
+                }));
+
+                const displayTotal = targetSum * (filter === 'TOUT' ? 1 : (0.98 + rng() * 0.04));
+
+                return { currentTotal: displayTotal, currentLabel: label, graphData: data };
+            }, [filter, config, seedValues, walletStats.lifetime]);
+
+            // 3. TRANSFER HISTORY GENERATION
+            const transferHistory = useMemo(() => {
+                if (config.transferMode === 'none') return [];
+                
+                const rng = sfc32(seedValues[2], seedValues[0], seedValues[3], seedValues[1]);
+                const weeklyIncome = config.totalAnnual / 52;
+                
+                const history = [];
+                const count = config.transferCount || 10; // Use configured count
+                
+                // Helper to create date string (DD/MM/YYYY)
+                const getPastDate = (daysAgo) => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - daysAgo);
+                    return d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                };
+
+                for(let i = 0; i < count; i++) {
+                    const daysAgo = 3 + (i * 7) + Math.floor(rng() * 3);
+                    
+                    // Base amount variation
+                    let rawAmount = weeklyIncome * (0.85 + rng() * 0.4);
+                    
+                    // Apply mode logic
+                    let finalAmountStr = formatMoney(rawAmount, config.transferMode === 'round');
+                    
+                    history.push({
+                        id: i,
+                        date: getPastDate(daysAgo),
+                        amount: finalAmountStr,
+                        status: 'Validé'
+                    });
+                }
+                return history;
+            }, [config, seedValues]);
+
+            const width = 100;
+            const height = 100;
+            const maxY = Math.max(...graphData.map(d => d.value)) * 1.2;
+            
+            const getX = (i) => (i / (graphData.length - 1)) * width;
+            const getY = (v) => height - (v / maxY * height);
+
+            const pathD = useMemo(() => {
+                if (graphData.length === 0) return "";
+                let d = `M ${getX(0)} ${getY(graphData[0].value)}`;
+                for (let i = 0; i < graphData.length - 1; i++) {
+                    const x0 = i > 0 ? getX(i - 1) : getX(0);
+                    const y0 = i > 0 ? getY(graphData[i - 1].value) : getY(graphData[0].value);
+                    const x1 = getX(i);
+                    const y1 = getY(graphData[i].value);
+                    const x2 = getX(i + 1);
+                    const y2 = getY(graphData[i + 1].value);
+                    const x3 = i < graphData.length - 2 ? getX(i + 2) : x2;
+                    const y3 = i < graphData.length - 2 ? getY(graphData[i + 2].value) : y2;
+                    const cp1x = x1 + (x2 - x0) / 6;
+                    const cp1y = y1 + (y2 - y0) / 6;
+                    const cp2x = x2 - (x3 - x1) / 6;
+                    const cp2y = y2 - (y3 - y1) / 6;
+                    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${x2} ${y2}`;
+                }
+                return d;
+            }, [graphData, maxY]);
+
+            const areaD = `${pathD} L ${width} ${height} L 0 ${height} Z`;
+
+            return (
+                <div className="flex h-dvh w-full bg-black text-white relative flex-col lg:flex-row">
+                    
+                    {/* DESKTOP SIDEBAR */}
+                    <aside className="hidden lg:flex w-[280px] flex-col border-r border-zinc-900 bg-black pt-8 pb-4">
+                         <div className="px-8 mb-10">
+                            <h1 className="text-3xl font-black italic tracking-tighter cursor-pointer text-white">mym</h1>
+                        </div>
+                        <nav className="flex-1 space-y-1">
+                            <div className="sidebar-item active">
+                                <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a4.5 4.5 0 0 0 0 9h5a4.5 4.5 0 0 1 0 9H6"/></svg>
+                                Revenus
+                            </div>
+                            <div className="sidebar-item">
+                                <svg className="w-5 h-5 mr-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                Mes affiliés
+                            </div>
+                        </nav>
+                        <div className="p-4 border-t border-zinc-900">
+                             <div className="flex items-center gap-3 p-3 rounded-xl hover:bg-zinc-900 cursor-pointer" onClick={onBack}>
+                                <img src={config.profilePic} className="w-8 h-8 rounded-full object-cover" />
+                                <div className="overflow-hidden">
+                                    <p className="text-sm font-bold truncate">{config.username}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    {/* MAIN CONTENT */}
+                    <main className="flex-1 flex flex-col bg-mym-main relative overflow-hidden">
+                        
+                        {/* HEADER */}
+                        <header className="h-14 flex items-center justify-between px-6 pt-4 shrink-0 z-20">
+                            <div className="w-6"></div> 
+                            <h2 className="text-[17px] font-bold text-white">Mes revenus</h2>
+                            <div className="relative">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                                <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border border-black"></div>
+                            </div>
+                        </header>
+
+                        <div className="flex-1 overflow-y-auto no-scrollbar pb-32 pt-6">
+                            <div className="max-w-2xl mx-auto px-6 space-y-8 animate-fade">
+                                
+                                <div className="text-center space-y-1">
+                                    <h1 className="text-4xl font-bold tracking-tight text-white number-transition">{formatMoney(currentTotal)}</h1>
+                                    <p className="text-sm font-medium text-zinc-400 number-transition">{currentLabel}</p>
+                                </div>
+
+                                <div className="flex justify-center gap-3">
+                                    {['1S', '1M', '1A', 'TOUT'].map(f => (
+                                        <button 
+                                            key={f} 
+                                            onClick={() => setFilter(f)}
+                                            className={`filter-btn ${filter === f ? 'active' : ''}`}
+                                        >
+                                            {f}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                <div className="chart-container" 
+                                    onMouseMove={(e) => {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const x = e.clientX - rect.left;
+                                        const idx = Math.round((x / rect.width) * (graphData.length - 1));
+                                        setHoveredIdx(Math.max(0, Math.min(idx, graphData.length - 1)));
+                                    }} 
+                                    onTouchMove={(e) => {
+                                        const rect = e.currentTarget.getBoundingClientRect();
+                                        const touch = e.touches[0];
+                                        const x = touch.clientX - rect.left;
+                                        const idx = Math.round((x / rect.width) * (graphData.length - 1));
+                                        setHoveredIdx(Math.max(0, Math.min(idx, graphData.length - 1)));
+                                    }}
+                                    onMouseLeave={() => setHoveredIdx(null)}
+                                    onTouchEnd={() => setHoveredIdx(null)}
+                                >
+                                    <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+                                        <defs>
+                                            <linearGradient id="gradientFill" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="0%" stopColor="#5271ff" stopOpacity="0.4" />
+                                                <stop offset="80%" stopColor="#5271ff" stopOpacity="0" />
+                                            </linearGradient>
+                                        </defs>
+                                        <path d={areaD} fill="url(#gradientFill)" className="transition-all duration-300" />
+                                        <path key={filter} d={pathD} fill="none" stroke="#5d7aff" strokeWidth="0.8" strokeLinecap="round" strokeLinejoin="round" className="chart-line"/>
+                                        {hoveredIdx !== null && (
+                                            <g>
+                                                <line x1={getX(hoveredIdx)} y1="0" x2={getX(hoveredIdx)} y2={height} stroke="rgba(255,255,255,0.2)" strokeWidth="0.5" />
+                                                <circle cx={getX(hoveredIdx)} cy={getY(graphData[hoveredIdx].value)} r="2" fill="#5271ff" stroke="#fff" strokeWidth="1" />
+                                            </g>
+                                        )}
+                                    </svg>
+                                    {hoveredIdx !== null && (
+                                        <div className="absolute pointer-events-none z-50" style={{ left: `${getX(hoveredIdx)}%`, top: '10%' }}>
+                                            <div className="bg-zinc-800/95 backdrop-blur px-4 py-2 rounded-xl border border-zinc-700 transform -translate-x-1/2 text-center shadow-2xl">
+                                                <div className="text-[10px] text-zinc-400 font-semibold mb-0.5 uppercase tracking-wide">{graphData[hoveredIdx].label}</div>
+                                                <div className="text-sm font-bold text-white">{formatMoney(graphData[hoveredIdx].value)}</div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-between items-start pt-4">
+                                    <div className="flex-1">
+                                        <div className="text-xl md:text-2xl font-bold text-white mb-1">{formatMoney(walletStats.valid)}</div>
+                                        <div className="flex items-center gap-1 text-[11px] font-semibold text-amount-green">
+                                            Validé pour le prochain versement
+                                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                        </div>
+                                    </div>
+                                    <div className="flex-1 text-right">
+                                        <div className="text-xl md:text-2xl font-bold text-white mb-1">{formatMoney(walletStats.pending)}</div>
+                                        <div className="flex items-center justify-end gap-1 text-[11px] font-semibold text-amount-yellow">
+                                            En attente de validation
+                                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-8">
+                                    <div className="flex justify-between items-end mb-3">
+                                        <div>
+                                            <div className="text-sm font-bold text-white mb-1">Prochain versement</div>
+                                            <div className="text-xs text-zinc-400">{walletStats.days} jours restants</div>
+                                        </div>
+                                        <div className="text-sm font-bold text-white">{walletStats.nextDate}</div>
+                                    </div>
+                                    <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-600 w-2/3 rounded-full"></div>
+                                    </div>
+                                </div>
+
+                                {/* TRANSFERS LIST - CONDITIONALLY RENDERED */}
+                                {config.transferMode !== 'none' && (
+                                    <div className="pt-8 animate-fade" style={{animationDelay: '0.2s'}}>
+                                        <h3 className="text-md font-bold text-white mb-4 flex items-center gap-2">
+                                            <svg className="w-4 h-4 text-zinc-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a4.5 4.5 0 0 0 0 9h5a4.5 4.5 0 0 1 0 9H6"/></svg>
+                                            Derniers virements
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {transferHistory.map((t, i) => (
+                                                <div key={i} className="flex items-center justify-between p-4 bg-zinc-900/50 rounded-xl border border-zinc-800/50">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-green-500/10 flex items-center justify-center text-green-500">
+                                                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 7l10 10M17 7l-10 10"/></svg>
+                                                        </div>
+                                                        <div>
+                                                            <div className="text-sm font-bold text-white">Virement bancaire</div>
+                                                            <div className="text-[11px] text-zinc-500">{t.date}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-sm font-bold text-white">{t.amount}</div>
+                                                        <div className="text-[10px] font-medium text-green-500 bg-green-500/10 px-2 py-0.5 rounded-full inline-block mt-1">{t.status}</div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                            </div>
+                        </div>
+
+                        <button className="fab">
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                        </button>
+
+                        <div className="bottom-nav lg:hidden">
+                            <div className="nav-item">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                            </div>
+                            <div className="nav-item active">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M17 5H9.5a4.5 4.5 0 0 0 0 9h5a4.5 4.5 0 0 1 0 9H6"/></svg>
+                            </div>
+                            <div className="nav-item">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                            </div>
+                            <div className="nav-item">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                            </div>
+                             <div className="nav-item" onClick={onBack}>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                            </div>
+                        </div>
+
+                    </main>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [step, setStep] = useState('config'); 
+            const [config, setConfig] = useState({
+                totalAnnual: 667885,
+                username: 'Sara_Vip',
+                profilePic: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=256&h=256&auto=format&fit=crop',
+                transferMode: 'none',
+                transferFreq: 'weekly',
+                pendingPercent: 15,
+                transferCount: 10
+            });
+
+            if (step === 'config') return <ConfigStep onGenerate={(d) => { setConfig(d); setStep('dashboard'); }} defaultData={config} />;
+            return <MymDashboard config={config} onBack={() => setStep('config')} />;
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>

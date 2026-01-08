@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Phantom Wallet Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; margin: 0; overflow: hidden; }
+        
+        /* Scrollbar */
+        .wallet-scroll::-webkit-scrollbar { width: 4px; }
+        .wallet-scroll::-webkit-scrollbar-track { background: transparent; }
+        .wallet-scroll::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        .wallet-scroll::-webkit-scrollbar-thumb:hover { background: #777; }
+
+        /* Animations */
+        .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+        .animate-slide-down { animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } 30%, 50%, 70% { transform: translate3d(-4px, 0, 0); } 40%, 60% { transform: translate3d(4px, 0, 0); } }
+
+        /* Custom Styles */
+        .phantom-gradient-btn { background: #AB9FF2; color: #222; }
+        .phantom-gradient-btn:hover { background: #9a8ee0; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        phantom: {
+                            bg: '#222222',
+                            card: '#333333',
+                            green: '#16c784',
+                            text: '#FFFFFF',
+                            subtext: '#999999',
+                            input: '#1a1a1a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // --- ASSETS & DATA ---
+        const ASSETS = {
+            // Updated Phantom Logo to a reliable source (Phantom Labs GitHub Avatar)
+            phantomLogo: "https://avatars.githubusercontent.com/u/78782331?s=200&v=4",
+            googleLogo: "https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg",
+            firefoxLogo: "https://upload.wikimedia.org/wikipedia/commons/a/a0/Firefox_logo%2C_2019.svg",
+            
+            // Icons Updated
+            sol: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/So11111111111111111111111111111111111111112/logo.png",
+            usdc: "https://raw.githubusercontent.com/solana-labs/token-list/main/assets/mainnet/EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v/logo.png",
+            btc: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png",
+            eth: "https://assets.coingecko.com/coins/images/279/large/ethereum.png",
+            jup: "https://static.jup.ag/jup/icon.png",
+            bonk: "https://assets.coingecko.com/coins/images/28600/large/bonk.jpg",
+            render: "https://assets.coingecko.com/coins/images/11636/large/rndr.png",
+            usdt: "https://assets.coingecko.com/coins/images/325/large/Tether.png",
+            bnb: "https://assets.coingecko.com/coins/images/825/large/bnb-icon2_2x.png",
+            xrp: "https://assets.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png",
+            ada: "https://assets.coingecko.com/coins/images/975/large/cardano.png",
+            avax: "https://assets.coingecko.com/coins/images/12559/large/Avalanche_Circle_RedWhite_Trans.png",
+            dot: "https://assets.coingecko.com/coins/images/12171/large/polkadot.png",
+            matic: "https://assets.coingecko.com/coins/images/4713/large/matic-token-icon.png",
+            link: "https://assets.coingecko.com/coins/images/877/large/chainlink-new-logo.png",
+            uni: "https://assets.coingecko.com/coins/images/12504/large/uniswap-uni.png",
+            near: "https://assets.coingecko.com/coins/images/10365/large/near.png"
+        };
+
+        const CRYPTO_DB = [
+            { id: 'sol', name: 'Solana', symbol: 'SOL', price: 145.20, icon: ASSETS.sol },
+            { id: 'usdc', name: 'USDC', symbol: 'USDC', price: 1.00, icon: ASSETS.usdc },
+            { id: 'btc', name: 'Bitcoin', symbol: 'BTC', price: 64200.50, icon: ASSETS.btc },
+            { id: 'eth', name: 'Ethereum', symbol: 'ETH', price: 3450.10, icon: ASSETS.eth },
+            { id: 'usdt', name: 'Tether', symbol: 'USDT', price: 1.00, icon: ASSETS.usdt },
+            { id: 'bnb', name: 'BNB', symbol: 'BNB', price: 590.30, icon: ASSETS.bnb },
+            { id: 'jup', name: 'Jupiter', symbol: 'JUP', price: 1.12, icon: ASSETS.jup },
+            { id: 'bonk', name: 'Bonk', symbol: 'BONK', price: 0.000025, icon: ASSETS.bonk },
+            { id: 'render', name: 'Render', symbol: 'RNDR', price: 7.80, icon: ASSETS.render },
+            { id: 'xrp', name: 'XRP', symbol: 'XRP', price: 0.60, icon: ASSETS.xrp },
+            { id: 'ada', name: 'Cardano', symbol: 'ADA', price: 0.45, icon: ASSETS.ada },
+            { id: 'avax', name: 'Avalanche', symbol: 'AVAX', price: 35.20, icon: ASSETS.avax },
+            { id: 'dot', name: 'Polkadot', symbol: 'DOT', price: 6.80, icon: ASSETS.dot },
+            { id: 'matic', name: 'Polygon', symbol: 'MATIC', price: 0.55, icon: ASSETS.matic },
+            { id: 'link', name: 'Chainlink', symbol: 'LINK', price: 14.50, icon: ASSETS.link },
+            { id: 'uni', name: 'Uniswap', symbol: 'UNI', price: 9.20, icon: ASSETS.uni },
+            { id: 'near', name: 'NEAR Protocol', symbol: 'NEAR', price: 5.40, icon: ASSETS.near },
+        ];
+
+        // --- ICONS ---
+        const Icons = {
+            Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>,
+            Copy: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>,
+            ArrowDown: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>,
+            ArrowUp: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"></line><polyline points="5 12 12 5 19 12"></polyline></svg>,
+            Swap: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 3 21 3 21 8"></polyline><line x1="4" y1="20" x2="21" y2="3"></line><polyline points="21 16 21 21 16 21"></polyline><line x1="15" y1="15" x2="21" y2="21"></line><line x1="4" y1="4" x2="9" y2="9"></line></svg>,
+            Dollar: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>,
+            Search: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>,
+            NavHome: ({active}) => <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>,
+            NavGrid: ({active}) => <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>,
+            NavSwap: ({active}) => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? "2.5" : "2"}><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8V20M17 20L21 16M17 20L13 16" /></svg>,
+            NavActivity: ({active}) => <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>,
+            NavGlobe: ({active}) => <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>,
+            ChevronDown: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>,
+            Edit: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+        };
+
+        // --- BACKGROUND COMPONENTS ---
+
+        const GoogleBackground = ({ onExtensionClick }) => (
+            <div className="absolute inset-0 bg-white flex flex-col font-arial select-none">
+                {/* Header */}
+                <div className="h-12 flex justify-end items-center px-4 gap-4 text-sm text-gray-700">
+                    <span className="hover:underline cursor-pointer">Gmail</span>
+                    <span className="hover:underline cursor-pointer">Images</span>
+                    <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center cursor-pointer hover:bg-gray-300 transition-colors">
+                        <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+                    </div>
+                    {/* Phantom Extension Icon */}
+                    <div onClick={onExtensionClick} className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center cursor-pointer transition-colors" title="Phantom">
+                        <img src={ASSETS.phantomLogo} className="w-5 h-5" alt="Phantom Extension" />
+                    </div>
+                    <div className="w-8 h-8 rounded-full bg-purple-600 text-white flex items-center justify-center text-sm font-bold">A</div>
+                </div>
+                {/* Main */}
+                <div className="flex-1 flex flex-col items-center pt-[10vh]">
+                    <img src={ASSETS.googleLogo} className="w-[272px] mb-8" alt="Google" />
+                    <div className="w-[584px] h-[46px] rounded-full border border-gray-200 shadow-sm hover:shadow-md flex items-center px-4 gap-3 group bg-white">
+                        <Icons.Search className="text-gray-400 group-hover:text-gray-600" />
+                        <input type="text" className="flex-1 outline-none text-base bg-transparent text-gray-800" />
+                        <img src="https://www.gstatic.com/images/branding/googlemic/2x/googlemic_color_24dp.png" className="h-6 cursor-pointer" alt="voice" />
+                    </div>
+                </div>
+            </div>
+        );
+
+        const FirefoxBackground = ({ onExtensionClick }) => (
+            <div className="absolute inset-0 bg-[#1C1B22] flex flex-col text-white font-sans select-none">
+                 {/* Toolbar */}
+                 <div className="h-10 bg-[#0C0C0D] flex items-center px-2 w-full border-b border-black gap-2">
+                    <div className="w-48 h-8 bg-[#2B2A33] rounded-t text-xs flex items-center px-3 gap-2 border-t-2 border-[#4E44CE]">
+                        <img src={ASSETS.firefoxLogo} className="w-3 h-3" />
+                        <span className="truncate flex-1">Nouvel onglet</span>
+                        <span>×</span>
+                    </div>
+                    <span className="text-gray-400 text-xl">+</span>
+                 </div>
+                 <div className="h-10 bg-[#2B2A33] flex items-center px-4 gap-3 border-b border-black">
+                     <div className="flex gap-2 text-gray-400">
+                         <span className="hover:bg-white/10 p-1 rounded">←</span>
+                         <span className="hover:bg-white/10 p-1 rounded">→</span>
+                         <span className="hover:bg-white/10 p-1 rounded">↻</span>
+                     </div>
+                     <div className="flex-1 bg-[#1C1B22] h-7 rounded flex items-center px-3 border border-transparent hover:border-[#4E44CE] focus-within:border-[#4E44CE] transition-colors">
+                         <span className="text-gray-400 text-sm">Rechercher ou saisir une adresse</span>
+                     </div>
+                     {/* Extensions Area */}
+                     <div className="flex items-center gap-2 border-l border-gray-600 pl-2">
+                        <div onClick={onExtensionClick} className="p-1 hover:bg-white/10 rounded cursor-pointer transition-colors" title="Phantom">
+                             <img src={ASSETS.phantomLogo} className="w-5 h-5" alt="Phantom Extension" />
+                        </div>
+                        <span className="text-gray-400">≡</span>
+                     </div>
+                 </div>
+                 {/* Content */}
+                 <div className="flex-1 flex flex-col items-center pt-[15vh]">
+                    <div className="flex items-center gap-3 mb-8">
+                        <img src={ASSETS.firefoxLogo} className="w-20 h-20" />
+                        <span className="text-4xl font-bold tracking-tight">Firefox</span>
+                    </div>
+                    <div className="w-[700px] h-12 bg-[#2B2A33] rounded flex items-center px-4 shadow-lg">
+                        <Icons.Search />
+                        <span className="ml-3 text-gray-400 text-sm">Rechercher avec Google</span>
+                    </div>
+                 </div>
+            </div>
+        );
+
+        const AbstractBackground = ({ onExtensionClick }) => (
+            <div className="absolute inset-0 bg-cover bg-center flex flex-col justify-end p-8 select-none" style={{
+                backgroundImage: 'url("https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2564&auto=format&fit=crop")',
+            }}>
+                <div className="absolute inset-0 bg-black/20"></div>
+                
+                {/* Floating "Extension" for abstract view */}
+                <div onClick={onExtensionClick} className="absolute top-6 right-6 w-12 h-12 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center cursor-pointer hover:bg-white/20 border border-white/20 transition-all shadow-lg z-20">
+                    <img src={ASSETS.phantomLogo} className="w-6 h-6" />
+                </div>
+
+                {/* Fake Taskbar */}
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl h-16 flex items-center px-4 gap-4 shadow-2xl">
+                    {[1,2,3,4,5].map(i => (
+                        <div key={i} className="w-10 h-10 rounded-xl bg-white/20 hover:bg-white/40 transition-all hover:-translate-y-2 cursor-pointer shadow-lg"></div>
+                    ))}
+                </div>
+            </div>
+        );
+
+        // --- CORE COMPONENTS ---
+
+        const ConfigScreen = ({ onFinish, initialData }) => {
+            const [formData, setFormData] = useState(initialData);
+            const [background, setBackground] = useState('firefox');
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setFormData(p => ({ ...p, profileImage: reader.result }));
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const toggleAsset = (id) => {
+                const current = formData.enabledAssets;
+                const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+                setFormData(p => ({ ...p, enabledAssets: next }));
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#111]">
+                    <div className="w-[900px] h-[600px] bg-[#1e1e1e] rounded-2xl flex shadow-2xl overflow-hidden animate-fade-in border border-[#333]">
+                        {/* Sidebar Preview */}
+                        <div className="w-1/3 bg-[#161616] p-6 flex flex-col justify-between border-r border-[#333]">
+                            <div>
+                                <h2 className="text-xl font-bold text-white mb-2">Configuration</h2>
+                                <p className="text-xs text-gray-500 mb-6">Préparez votre simulation.</p>
+                                
+                                <label className="block text-xs font-bold text-gray-400 uppercase tracking-wide mb-3">Fond d'écran</label>
+                                <div className="space-y-2 mb-6">
+                                    {[
+                                        {id: 'google', label: 'Google Chrome (Light)'},
+                                        {id: 'firefox', label: 'Firefox (Dark)'},
+                                        {id: 'abstract', label: 'Bureau Abstrait'}
+                                    ].map(bg => (
+                                        <div key={bg.id} 
+                                            onClick={() => setBackground(bg.id)}
+                                            className={`p-3 rounded-lg border cursor-pointer transition-all flex items-center justify-between ${background === bg.id ? 'bg-[#4E44CE]/20 border-[#4E44CE]' : 'bg-[#222] border-[#333] hover:border-gray-500'}`}
+                                        >
+                                            <span className="text-sm font-medium text-gray-200">{bg.label}</span>
+                                            {background === bg.id && <div className="w-2 h-2 rounded-full bg-[#4E44CE]"></div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => onFinish(formData, background)}
+                                className="w-full bg-[#AB9FF2] hover:bg-[#9a8ee0] text-[#222] font-bold py-3 rounded-lg transition-colors"
+                            >
+                                Lancer la simulation
+                            </button>
+                        </div>
+
+                        {/* Form Content */}
+                        <div className="flex-1 p-8 overflow-y-auto wallet-scroll">
+                            <div className="space-y-6">
+                                {/* Profile */}
+                                <div className="flex items-center gap-4">
+                                    <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-700 border border-gray-600 flex-shrink-0">
+                                        {formData.profileImage ? (
+                                            <img src={formData.profileImage} className="w-full h-full object-cover" />
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs">IMG</div>
+                                        )}
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="bg-[#333] hover:bg-[#444] text-white text-xs px-3 py-2 rounded cursor-pointer inline-block transition-colors mb-2">
+                                            Choisir une photo
+                                            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+                                        </label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.accountName}
+                                            onChange={(e) => setFormData({...formData, accountName: e.target.value})}
+                                            className="w-full bg-transparent border-b border-gray-700 focus:border-[#AB9FF2] outline-none text-white py-1"
+                                            placeholder="Nom du compte"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Financials - Removed Daily Gain Input */}
+                                <div>
+                                    <label className="text-xs text-gray-500 block mb-1">Solde Total ($)</label>
+                                    <input type="number" value={formData.totalBalance} onChange={(e) => setFormData({...formData, totalBalance: parseFloat(e.target.value)})} className="w-full bg-[#222] rounded p-2 text-white border border-[#333] focus:border-[#AB9FF2] outline-none" />
+                                    <p className="text-[10px] text-gray-500 mt-1">Le gain journalier sera simulé automatiquement.</p>
+                                </div>
+
+                                {/* Assets */}
+                                <div>
+                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-3 block">Cryptos Visibles</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {CRYPTO_DB.map(asset => (
+                                            <div key={asset.id} 
+                                                onClick={() => toggleAsset(asset.id)}
+                                                className={`flex items-center p-2 rounded cursor-pointer border select-none transition-all ${formData.enabledAssets.includes(asset.id) ? 'border-[#AB9FF2] bg-[#AB9FF2]/10' : 'border-[#333] bg-[#222] opacity-60 hover:opacity-100'}`}
+                                            >
+                                                <img src={asset.icon} className="w-6 h-6 rounded-full mr-2" />
+                                                <span className="text-sm font-medium text-gray-200">{asset.name}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const LockScreen = ({ onUnlock }) => {
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState(false);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (password.length > 0) {
+                    onUnlock();
+                } else {
+                    setError(true);
+                    setTimeout(() => setError(false), 500);
+                }
+            };
+
+            return (
+                <div className="flex flex-col items-center justify-center h-full p-8 animate-fade-in">
+                    <div className="mb-8 flex flex-col items-center">
+                        <img src={ASSETS.phantomLogo} className="w-16 h-16 mb-6" alt="Phantom" />
+                        <h2 className="text-xl font-bold text-white">Bienvenue</h2>
+                    </div>
+                    
+                    <form onSubmit={handleSubmit} className="w-full space-y-4">
+                        <div className={`transition-transform ${error ? 'animate-shake' : ''}`}>
+                            <label className="block text-xs font-medium text-gray-400 mb-1 ml-1">Mot de passe</label>
+                            <input 
+                                type="password" 
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full bg-[#111] border border-gray-700 rounded-lg p-3 text-white focus:border-[#AB9FF2] focus:outline-none transition-colors"
+                                autoFocus
+                            />
+                        </div>
+                        <button 
+                            type="submit"
+                            className="w-full bg-[#AB9FF2] hover:bg-[#9a8ee0] text-[#222] font-bold py-3 rounded-lg transition-colors mt-4"
+                        >
+                            Déverrouiller
+                        </button>
+                    </form>
+                    <p className="mt-6 text-xs text-gray-500 cursor-pointer hover:text-white transition-colors">Mot de passe oublié ?</p>
+                </div>
+            );
+        };
+
+        const ActivityItem = ({ type, asset, amount, date }) => {
+            let icon, label, colorClass;
+            
+            if (type === 'sent') {
+                icon = <Icons.ArrowUp />;
+                label = `Envoyé ${asset.symbol}`;
+                colorClass = 'text-white';
+            } else if (type === 'received') {
+                icon = <Icons.ArrowDown />;
+                label = `Reçu ${asset.symbol}`;
+                colorClass = 'text-[#16c784]';
+            } else {
+                icon = <Icons.Swap />;
+                label = `Échangé ${asset.symbol}`;
+                colorClass = 'text-[#AB9FF2]';
+            }
+
+            return (
+                <div className="flex items-center justify-between p-3 hover:bg-[#333] rounded-lg cursor-pointer transition-colors">
+                    <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full bg-[#333] flex items-center justify-center ${colorClass}`}>
+                            {icon}
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-sm font-bold text-white">{label}</span>
+                            <span className="text-xs text-gray-400">{date} • Confirmé</span>
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-end">
+                        <span className={`text-sm font-bold ${type === 'sent' ? 'text-white' : '#16c784'}`}>
+                            {type === 'sent' ? '-' : '+'}{amount} {asset.symbol}
+                        </span>
+                    </div>
+                </div>
+            );
+        };
+
+        const Wallet = ({ data, onEdit }) => {
+            const [currentTab, setCurrentTab] = useState('home'); // home | activity
+            const formatCurrency = (val) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+
+            // Assets Calculation
+            const assets = useMemo(() => {
+                const visible = CRYPTO_DB.filter(a => data.enabledAssets.includes(a.id));
+                const total = data.totalBalance;
+                
+                return visible.map((asset, index) => {
+                    let weight = 0;
+                    if (index === 0) weight = 0.60;
+                    else if (index === 1) weight = 0.25;
+                    else weight = (0.15 / (visible.length - 2 || 1));
+                    
+                    if (visible.length === 1) weight = 1;
+
+                    const value = total * weight;
+                    const amount = value / asset.price;
+                    const coinPnl = (Math.random() * (value * 0.05) * (Math.random() > 0.5 ? 1 : -1)).toFixed(2);
+
+                    return {
+                        ...asset,
+                        value: value,
+                        amount: amount.toFixed(asset.price < 1 ? 2 : 4),
+                        pnl: coinPnl > 0 ? `+$${coinPnl}` : `-$${Math.abs(coinPnl)}`,
+                        isPositive: coinPnl > 0
+                    };
+                });
+            }, [data]);
+
+            // Calculated PnL for the whole wallet (Randomized based on total)
+            const walletPnl = useMemo(() => {
+                const percent = (Math.random() * 5 + 0.5) * (Math.random() > 0.4 ? 1 : -1);
+                const value = data.totalBalance * (percent / 100);
+                return { value: value.toFixed(2), percent: percent.toFixed(2), isPositive: percent > 0 };
+            }, [data.totalBalance]);
+
+            // Activity Generation
+            const activities = useMemo(() => {
+                const activeAssets = CRYPTO_DB.filter(a => data.enabledAssets.includes(a.id));
+                const acts = [];
+                const types = ['sent', 'received', 'swapped'];
+                
+                // Generate 15 fake activities
+                for(let i=0; i<15; i++) {
+                    const randomAsset = activeAssets[Math.floor(Math.random() * activeAssets.length)];
+                    if(!randomAsset) continue;
+                    
+                    const type = types[Math.floor(Math.random() * types.length)];
+                    const daysAgo = Math.floor(Math.random() * 10);
+                    const amount = (Math.random() * (data.totalBalance * 0.05) / randomAsset.price).toFixed(4);
+                    
+                    const date = new Date();
+                    date.setDate(date.getDate() - daysAgo);
+                    
+                    acts.push({
+                        id: i,
+                        type,
+                        asset: randomAsset,
+                        amount,
+                        date: daysAgo === 0 ? "Aujourd'hui" : `Il y a ${daysAgo} jours`
+                    });
+                }
+                return acts;
+            }, [data]);
+
+            return (
+                <div className="flex flex-col h-full overflow-hidden text-phantom-text font-sans animate-fade-in">
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-phantom-bg">
+                        <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+                            <div className="w-8 h-8 rounded-full overflow-hidden border border-[#333]">
+                                {data.profileImage ? <img src={data.profileImage} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-tr from-purple-500 to-blue-500" />}
+                            </div>
+                            <span className="font-bold text-[15px]">{data.accountName}</span>
+                            <span className="text-gray-500 text-xs"><Icons.ChevronDown /></span>
+                        </div>
+                        <div className="flex items-center gap-4 text-gray-400">
+                             <span className="hover:text-white cursor-pointer"><Icons.Copy /></span>
+                             <span className="hover:text-white cursor-pointer"><Icons.Search /></span>
+                             <span className="hover:text-white cursor-pointer" onClick={onEdit}><Icons.Settings /></span>
+                        </div>
+                    </div>
+
+                    {/* Content Switcher */}
+                    <div className="flex-1 overflow-y-auto wallet-scroll pb-4">
+                        {currentTab === 'home' ? (
+                            <>
+                                <div className="flex flex-col items-center pt-8 pb-8">
+                                    <h1 className="text-[38px] font-bold tracking-tight text-white mb-1">
+                                        {formatCurrency(data.totalBalance)}
+                                    </h1>
+                                    <div className={`flex items-center gap-1 px-2 py-1 rounded ${walletPnl.isPositive ? 'bg-[#16c784]/10' : 'bg-red-500/10'}`}>
+                                        <span className={`text-xs font-bold ${walletPnl.isPositive ? 'text-[#16c784]' : 'text-red-500'}`}>
+                                            {walletPnl.isPositive ? '+' : ''}${walletPnl.value} {walletPnl.isPositive ? '+' : ''}{walletPnl.percent}%
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* Actions */}
+                                <div className="flex justify-center gap-2 mb-8 px-4">
+                                    {[
+                                        { l: 'Recevoir', i: <Icons.ArrowDown /> }, { l: 'Envoyer', i: <Icons.ArrowUp /> },
+                                        { l: 'Échanger', i: <Icons.Swap /> }, { l: 'Acheter', i: <Icons.Dollar /> }
+                                    ].map((a, i) => (
+                                        <div key={i} className="flex flex-col items-center gap-2 cursor-pointer group flex-1">
+                                            <div className="w-12 h-12 bg-[#AB9FF2] rounded-full flex items-center justify-center text-[#222] group-hover:bg-[#9a8ee0] transition-colors">
+                                                {a.i}
+                                            </div>
+                                            <span className="text-[11px] font-medium text-white">{a.l}</span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Assets List */}
+                                <div className="px-4 space-y-1">
+                                     {assets.map((asset) => (
+                                         <div key={asset.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-[#333] transition-colors cursor-pointer group">
+                                             <div className="flex items-center gap-3">
+                                                 <img src={asset.icon} className="w-10 h-10 rounded-full bg-black/50" />
+                                                 <div className="flex flex-col">
+                                                     <span className="text-[15px] font-bold text-white">{asset.name}</span>
+                                                     <span className="text-[12px] text-gray-400 font-medium">
+                                                        {asset.amount} {asset.symbol}
+                                                     </span>
+                                                 </div>
+                                             </div>
+                                             <div className="flex flex-col items-end">
+                                                 <span className="text-[15px] font-bold text-white">
+                                                    {formatCurrency(asset.value)}
+                                                 </span>
+                                                 <span className={`text-[12px] font-medium ${asset.isPositive ? 'text-[#16c784]' : 'text-red-500'}`}>
+                                                    {asset.pnl}
+                                                 </span>
+                                             </div>
+                                         </div>
+                                     ))}
+                                </div>
+                                <div className="text-center mt-6 mb-4">
+                                     <span className="text-[#AB9FF2] text-sm font-medium cursor-pointer hover:underline">Gérer la liste des jetons</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="px-4 py-2">
+                                <h3 className="text-lg font-bold text-white mb-4 sticky top-0 bg-phantom-bg py-2 z-10">Activité Récente</h3>
+                                <div className="space-y-1">
+                                    {activities.length > 0 ? activities.map(act => (
+                                        <ActivityItem key={act.id} {...act} />
+                                    )) : (
+                                        <div className="text-center text-gray-500 py-10">Aucune activité récente</div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Nav */}
+                    <div className="h-[64px] bg-[#1a1a1a] border-t border-[#333] flex items-center justify-around px-2 z-10">
+                        <div onClick={() => setCurrentTab('home')} className={`p-3 cursor-pointer ${currentTab === 'home' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}><Icons.NavHome active={currentTab === 'home'} /></div>
+                        <div className="p-3 text-gray-500 hover:text-gray-300 cursor-pointer"><Icons.NavGrid /></div>
+                        <div className="p-3 text-gray-500 hover:text-gray-300 cursor-pointer"><Icons.NavSwap /></div>
+                        {/* Activity Tab Trigger */}
+                        <div onClick={() => setCurrentTab('activity')} className={`p-3 cursor-pointer ${currentTab === 'activity' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}`}><Icons.NavActivity active={currentTab === 'activity'} /></div>
+                        <div className="p-3 text-gray-500 hover:text-gray-300 cursor-pointer"><Icons.NavGlobe /></div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [step, setStep] = useState('config'); // config -> browser
+            const [bgType, setBgType] = useState('firefox');
+            const [isWalletOpen, setIsWalletOpen] = useState(false);
+            const [isLocked, setIsLocked] = useState(true);
+            
+            const [data, setData] = useState({
+                accountName: 'Main Wallet',
+                profileImage: null,
+                totalBalance: 2450.75,
+                enabledAssets: ['sol', 'usdc', 'jup', 'bonk', 'render']
+            });
+
+            const handleConfigFinish = (newData, newBg) => {
+                setData(newData);
+                setBgType(newBg);
+                setStep('browser');
+            };
+
+            const toggleWallet = () => {
+                setIsWalletOpen(!isWalletOpen);
+            };
+
+            const handleUnlock = () => {
+                setIsLocked(false);
+            };
+
+            // Positioning for the wallet based on browser type
+            // Firefox bar is ~40px + 40px, Google is ~48px
+            const walletPositionClass = bgType === 'firefox' 
+                ? "top-[88px] right-4" 
+                : bgType === 'google' 
+                    ? "top-[52px] right-4"
+                    : "top-[80px] right-8"; // abstract
+
+            return (
+                <div className="relative w-full h-screen overflow-hidden">
+                    {/* Background Layer with Extension Trigger */}
+                    {step !== 'config' && (
+                        <>
+                            {bgType === 'google' && <GoogleBackground onExtensionClick={toggleWallet} />}
+                            {bgType === 'firefox' && <FirefoxBackground onExtensionClick={toggleWallet} />}
+                            {bgType === 'abstract' && <AbstractBackground onExtensionClick={toggleWallet} />}
+                        </>
+                    )}
+
+                    {/* Config Screen (Modal) */}
+                    {step === 'config' && (
+                        <ConfigScreen onFinish={handleConfigFinish} initialData={data} />
+                    )}
+
+                    {/* Extension Popup Container */}
+                    {isWalletOpen && step === 'browser' && (
+                        <div className={`absolute ${walletPositionClass} w-[360px] h-[600px] bg-phantom-bg rounded-2xl shadow-2xl border border-[#333] z-50 animate-slide-down overflow-hidden`}>
+                            {isLocked ? (
+                                <LockScreen onUnlock={handleUnlock} />
+                            ) : (
+                                <Wallet data={data} onEdit={() => setStep('config')} />
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
